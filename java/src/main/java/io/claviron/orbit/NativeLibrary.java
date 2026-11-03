@@ -7,13 +7,26 @@ public final class NativeLibrary implements AutoCloseable {
     final Ffm ffi;
     private int runtimes;
     private boolean closed;
+    private final NativeLoader.Extracted extracted;
 
-    private NativeLibrary(Path path) {
+    private NativeLibrary(Path path, NativeLoader.Extracted extracted) {
         ffi = new Ffm(path);
+        this.extracted = extracted;
+    }
+
+    /** Load the matching, version-checked native classifier JAR without network access. */
+    public static NativeLibrary load() {
+        NativeLoader.Extracted extracted = NativeLoader.extract();
+        try {
+            return new NativeLibrary(extracted.path(), extracted);
+        } catch (RuntimeException | Error failure) {
+            try { extracted.close(); } catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+            throw failure;
+        }
     }
 
     public static NativeLibrary load(Path path) {
-        return new NativeLibrary(path);
+        return new NativeLibrary(path, null);
     }
 
     /** All budgets are explicit. No common pool or default completion executor is used. */
@@ -44,9 +57,11 @@ public final class NativeLibrary implements AutoCloseable {
 
     @Override
     public synchronized void close() {
-        if (closed) return;
-        if (runtimes != 0) throw new NativeException(5);
-        ffi.arena.close();
-        closed = true;
+        if (!closed) {
+            if (runtimes != 0) throw new NativeException(5);
+            ffi.arena.close();
+            closed = true;
+        }
+        if (extracted != null) extracted.close();
     }
 }

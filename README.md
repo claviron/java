@@ -15,7 +15,7 @@ without JNI, preview APIs or a Java framework.
 
 - JDK 25 LTS.
 - Stable Rust 1.99 or later and a C11 compiler.
-- Python 3 for the dependency-free build/check scripts.
+- Python 3.11+ for the dependency-free build/check and release scripts.
 - Linux x86-64 is the currently validated native/FFM platform.
 
 Set `JAVA_HOME` to a JDK 25 installation, then run:
@@ -64,8 +64,42 @@ The runtime needs an explicit native-access grant. On the class path:
   --illegal-native-access=deny -cp orbit-java.jar:application.jar example.Main
 ```
 
-Pass the library path to `NativeLibrary.load(Path)`. There is no automatic native
-library download, runtime discovery or platform fallback.
+For the development artifacts above, pass the library path to
+`NativeLibrary.load(Path)`. Maven packages also support `NativeLibrary.load()`:
+it selects a matching native classifier JAR already present on the classpath,
+checks version/ABI/SHA-256, and extracts a private temporary library. Library
+close unloads it before removing the extracted file. Failed loads also clean up.
+A live runtime prevents unloading. There is no runtime download, system-library
+fallback or silent selection between duplicate native resources.
+
+## Maven packages and release preparation
+
+The source release pipeline now prepares a platform-neutral Java JAR, sources,
+Javadoc, POM and five native classifier JARs: Linux amd64/arm64, macOS arm64,
+and FreeBSD amd64/arm64. Proposed coordinates are
+`dev.claviron:orbit-java:0.1.0`; no Maven Central release is available yet.
+Native binaries and their source/dependency receipts live in ignored
+`prebuilds/`. Build targets use portable CPU baselines.
+
+```sh
+bash scripts/publish.sh --prepare
+# Preview the locally prepared target without requiring other platforms:
+bash scripts/publish.sh --package --target linux-x86_64
+# A full unsigned preview requires all five prepared targets:
+bash scripts/publish.sh --dry-run
+```
+
+`scripts/build-all.sh` prepares isolated remote clones and collects verified
+artifacts using an ignored `.hosts` file based on `.hosts.example`.
+`scripts/sync.sh` collects separately prepared artifacts. Signing and Portal
+upload are explicit later operations on the publishing machine; preparation and
+preview never publish. The workflow supports macOS as the publishing machine,
+including a manually uploaded signed bundle and browser login/2FA.
+
+See [the release workflow](docs/RELEASE.md) for target triples, source/dependency
+provenance, native loader behavior, downstream dependency examples, remote
+builders and signing. Only Linux x86-64 native execution is currently validated;
+the other four targets require builds and validation on their own platforms.
 
 ## Application API
 
@@ -281,9 +315,8 @@ agree on that compiled geometry. Adding invoke never attaches a second reader
 to an HTTP lane and cannot place an unbridged invoke lane in the HTTP event
 bridge's routing set. It opens no invocation broadcast ring or public listener.
 The binding uses `claviron::orbit::invoke::Client` and the core Link route/driver;
-Claviron and Orbitive need no source changes for this mode. The local orbit-js
-implementation supplies lifecycle behavior as a reference, but has no invoke API
-to copy.
+Claviron and Orbitive need no source changes for this mode. Orbit Java and
+Orbit JS use the same separate-Link lifecycle and local-cancellation contracts.
 
 Routes map logical targets to Link services once at creation. A service must have
 exactly one live endpoint; duplicates return `AMBIGUOUS_TARGET`. There is no
@@ -368,5 +401,5 @@ while any runtime is attached. Unrecoverable ABI/driver failures retain live
 resources rather than unloading code still in use.
 
 See [the C header](native/include/orbit_java.h),
-[architecture](ARCHITECTURE.md) and [implementation plan](PLAN.md) for contracts
-and remaining work.
+[architecture](ARCHITECTURE.md) and [release workflow](docs/RELEASE.md) for contracts
+and remaining release work.

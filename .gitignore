@@ -84,3 +84,11 @@ core.*
 !/SECURITY.md
 !ARCHITECTURE.md
 !SKILL.md
+
+# Release artifacts and operator-owned publishing/build configuration
+/prebuilds/
+/.hosts
+/.hosts.*
+!/.hosts.example
+/.release-sync.local.json
+/.release.local.json

@@ -268,3 +268,31 @@ The real invoke harness runs a JVM and Rust service on separate fresh fleets.
 It tests both directions, typed failures/bounds, caller abandonment without
 rollback, local generation cancellation, stale replies, independent HTTP progress
 and a nested outgoing/incoming call that completes during application close.
+
+
+## Maven distribution and packaged native loading
+
+The Java API is a platform-neutral Java 25 JAR. Five native classifier JARs
+carry only the corresponding library and immutable release metadata. Java
+package names and Maven group coordinates are independent. The main artifact
+contains API version/ABI metadata; a selected native resource contains matching
+version/ABI/classifier metadata and the library SHA-256.
+
+`NativeLibrary.load()` selects the current supported OS/architecture, requires
+exactly one matching classpath resource, validates metadata and copies the
+library into a private temporary directory while hashing it. FFM then checks the
+actual C ABI as for explicit `load(Path)`. There is no runtime download, system
+search or platform fallback. `load(Path)` retains operator-controlled loading.
+The library owner keeps extracted files until its FFM arena closes; active
+runtimes refuse close. Failed loading removes its extraction. Cleanup failures
+remain observable and can be retried by closing the library again.
+
+The release workflow uses published Cargo dependencies in an isolated source
+snapshot and a shared ignored release lockfile. Native receipts bind sources,
+dependencies, target, portable CPU profile and binary checksum. Remote workers
+build isolated committed clones and return only verified prebuilds. Package
+assembly produces the common JAR, source/Javadoc JARs, POM and classified native
+JARs without bundling fixture code. Partial previews cannot be uploaded.
+Signing and a USER_MANAGED Portal upload are separate explicit commands; upload
+does not request automatic publication. Packaging tests use an ephemeral key
+and mock the upload endpoint, without a real deployment.
