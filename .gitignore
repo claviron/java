@@ -1,9 +1,86 @@
-/AGENTS.local.md
-*.local.sh
 /.local/
 /.cache/
-/target/
-/native/target/
 /java/.gradle/
 /java/build/
+# --- Rust / Cargo ---
+/target/
+/target-native/
+/native/target/
+/.benchmarks/
 /.cargo/config.toml
+Cargo.lock
+# --- Build output ---
+/build/
+/build-*/
+cmake-build-*/
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+# --- CMake / native tooling ---
+vcpkg_installed/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+CTestTestfile.cmake
+install_manifest.txt
+compile_commands.json
+.cache/
+# --- Runtime / sockets / pids / logs ---
+*.sock
+*.pid
+*.lock
+!/examples/fastapi-app/uv.lock
+*.log
+logs/
+/tmp/
+tmp/
+/tests/result*.txt
+/examples/database/demo.sqlite-shm
+/examples/database/demo.sqlite-wal
+__pycache__
+/.venv/
+# --- Secrets & local config ---
+/.env
+/.env.*
+/*.env
+# --- Editor / IDE ---
+/.idea/
+# Share only portable editor tasks, suggestions and opt-in settings templates.
+**/.vscode/*
+!**/.vscode/extensions.json
+!**/.vscode/tasks.json
+!**/.vscode/settings.example.json
+/.nvimlog
+.history/
+.vs/
+*.swp
+*.swo
+*.swn
+*~
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+# --- Misc local ---
+*.bak
+*.orig
+*.rej
+core.*
+*.core
+*.local.sh
+# docs
+*.md
+!README.md
+!BENCHMARKS.md
+!/docs/**/*.md
+!/CONTRIBUTING.md
+!/SECURITY.md
+!ARCHITECTURE.md
+!SKILL.md
