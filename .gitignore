@@ -1,0 +1,9 @@
+/AGENTS.local.md
+*.local.sh
+/.local/
+/.cache/
+/target/
+/native/target/
+/java/.gradle/
+/java/build/
+/.cargo/config.toml

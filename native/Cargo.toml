@@ -1,0 +1,19 @@
+[package]
+name = "orbit-java-native"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+claviron = { version = "0.2.0-alpha.24", default-features = false, features = ["orbit", "application"] }
+async-trait = "0.1"
+http = "1"
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "net", "sync", "macros", "io-util"] }
+tokio-util = { version = "0.7", features = ["rt"] }
