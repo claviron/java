@@ -14,7 +14,7 @@ without JNI, preview APIs or a Java framework.
 ## Requirements and validation
 
 - JDK 25 LTS.
-- Stable Rust 1.99 or later and a C11 compiler.
+- Stable Rust 1.98 or later and a C11 compiler.
 - Python 3.11+ for the dependency-free build/check and release scripts.
 - Linux x86-64 is the currently validated native/FFM platform.
 

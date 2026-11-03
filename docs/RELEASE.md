@@ -34,7 +34,7 @@ Mach-O files. Header validation is not execution on the target operating system.
 
 ## Native preparation
 
-Native builders need Python 3.11+, stable Rust 1.99+, Bash and a native toolchain.
+Native builders need Python 3.11+, stable Rust 1.98+, Bash and a native toolchain.
 The requested Rust target and a matching linker/sysroot must be installed for a
 cross build. Package assembly additionally requires JDK 25+ via `JAVA_HOME`.
 Signing requires GnuPG. SSH and rsync are needed for remote preparation/collection.
