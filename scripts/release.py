@@ -143,7 +143,7 @@ def ensure_lock(root=ROOT):
     lock = root / "prebuilds/Cargo.lock"
     if not lock.is_file():
         with tempfile.TemporaryDirectory(prefix="orbit-java-resolve-") as temporary:
-            source = Path(temporary)
+            source = Path(temporary).resolve()
             copy_sources(root, source)
             run(["cargo", "generate-lockfile"], cwd=source)
             atomic(lock, (source / "Cargo.lock").read_bytes())
@@ -186,6 +186,15 @@ def read_native(root, classifier, expected=None, directory=None):
     return data, receipt
 
 
+def validate_local_dependencies(metadata, source):
+    # Cargo canonicalizes manifests; macOS temporary paths can use /var symlinks.
+    source = source.resolve()
+    for package in metadata["packages"]:
+        if package["source"] is None and not Path(package["manifest_path"]).resolve().is_relative_to(source):
+            name = package.get("name", "unknown package")
+            raise ValueError(f"Release dependency resolves to an external local checkout: {name}")
+
+
 def prepare(root=ROOT, target=None):
     classifier = selected_target(target)
     triple, library, cpu, _, _ = TARGETS[classifier]
@@ -194,7 +203,7 @@ def prepare(root=ROOT, target=None):
     lock_hash = file_sha(lock)
     # Stage outside the checkout so parent .cargo/config.toml cannot inject local patches.
     with tempfile.TemporaryDirectory(prefix="orbit-java-native-") as temporary:
-        source = Path(temporary)
+        source = Path(temporary).resolve()
         copy_sources(root, source)
         shutil.copyfile(lock, source / "Cargo.lock")
         env = os.environ.copy()
@@ -206,12 +215,10 @@ def prepare(root=ROOT, target=None):
             f"-C\x1ftarget-cpu={cpu}"
             f"\x1f--remap-path-prefix={Path.home()}=/build-home"
             f"\x1f--remap-path-prefix={cargo_home}=/cargo"
-            f"\x1f--remap-path-prefix={tempfile.gettempdir()}=/build")
+            f"\x1f--remap-path-prefix={Path(tempfile.gettempdir()).resolve()}=/build")
         metadata = subprocess.check_output(["cargo", "metadata", "--locked", "--all-features", "--format-version", "1"],
                                            cwd=source, env=env, text=True)
-        for package in json.loads(metadata)["packages"]:
-            if package["source"] is None and not Path(package["manifest_path"]).is_relative_to(source):
-                raise ValueError("Release dependency resolves to an external local checkout")
+        validate_local_dependencies(json.loads(metadata), source)
         run(["cargo", "build", "--workspace", "--all-features", "--all-targets", "--locked", "--release", "--target", triple], cwd=source, env=env)
         data = (output / triple / "release" / library).read_bytes()
     if expected != context(root) or lock_hash != file_sha(lock):

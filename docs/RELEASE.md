@@ -50,8 +50,9 @@ bash scripts/publish.sh --prepare --target aarch64-unknown-freebsd
 Preparation stages only `prebuilds/<classifier>/<library>` and `release.json`.
 It builds a release profile from a temporary source snapshot outside the working
 checkout, so ignored development `.cargo/config.toml` patches do not enter the
-release. External local-path dependencies are refused. Dependency resolution uses
-published Cargo packages. The generated `prebuilds/Cargo.lock` is the release's
+release. Dependency boundaries compare canonical filesystem paths, including
+symlinked temporary directories. External local-path dependencies are refused.
+Dependency resolution uses published Cargo packages. The generated `prebuilds/Cargo.lock` is the release's
 shared dependency snapshot; the development checkout's `Cargo.lock` is preserved.
 Native builds use workspace/all-features/all-targets and `--locked`.
 

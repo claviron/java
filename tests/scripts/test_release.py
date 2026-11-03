@@ -82,6 +82,24 @@ class ReleaseChecks(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.selected_target("macos-x86_64")
 
+    def test_cargo_canonical_manifests_stay_inside_symlinked_staging_root(self):
+        alias = Path(self.temporary.name) / "source-alias"
+        alias.symlink_to(self.root, target_is_directory=True)
+        package = {"name": "workspace", "source": None,
+                   "manifest_path": str((self.root / "native/Cargo.toml").resolve())}
+        release.validate_local_dependencies({"packages": [package]}, alias)
+
+    def test_external_dependency_symlink_cannot_bypass_release_isolation(self):
+        external = Path(self.temporary.name) / "external"
+        external.mkdir()
+        (external / "Cargo.toml").write_text("fixture")
+        alias = self.root / "external-alias"
+        alias.symlink_to(external, target_is_directory=True)
+        package = {"name": "external", "source": None,
+                   "manifest_path": str(alias / "Cargo.toml")}
+        with self.assertRaisesRegex(ValueError, "external local checkout: external"):
+            release.validate_local_dependencies({"packages": [package]}, self.root)
+
     def test_receipt_binds_binary_lock_source_and_portable_cpu(self):
         target = "linux-x86_64"
         prepared(self.root, target)
