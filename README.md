@@ -1,21 +1,27 @@
 # orbit-java
 
-Framework-independent Java application bindings for Claviron's same-host Orbit
-Link. The Java application runs in a separate JVM. The native library consumes
-Claviron through its public facade; Claviron does not embed Java or depend on
-this binding.
+A Java library for handling Claviron application requests over same-host Orbit
+Link. Your normal Java application imports the library and supplies a request
+handler. Claviron owns public connections and host routing; your application
+owns its handlers, threads and JVM lifetime.
 
-The implementation joins a named application as a `java` lane, serves HTTP with
-incremental uploads and streaming responses, and shares ApplicationEvents. It
-supports application generations and bidirectional invokes on a separate,
-application-owned Link. Close drains owned work. The binding uses JDK FFM,
-without JNI, preview APIs or a Java framework.
+## Current stage
+
+HTTP with incremental uploads and streaming responses, shared application
+events, start/stop/restart with generation cancellation, and bidirectional
+invokes on a separate Link are supported. The binding uses JDK FFM, without JNI,
+preview APIs or a Java framework. Shared cells and sessions remain a later stage.
+
+End-to-end validation covers Linux x86-64. macOS arm64 is checked to load, join
+and close; the other platforms are built and checked but have not been run.
 
 ## Install
 
-Requires JDK 25 LTS. Packages are on Maven Central. Add the API and the native
-library of the platform you deploy on, one of `linux-x86_64`, `linux-aarch64`,
-`macos-aarch64`, `freebsd-x86_64` or `freebsd-aarch64`:
+Requires JDK 25 LTS. Add the API and the native library for your platform, one of
+`linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `freebsd-x86_64` or
+`freebsd-aarch64`.
+
+Gradle:
 
 ```kotlin
 dependencies {
@@ -23,6 +29,8 @@ dependencies {
     runtimeOnly("dev.claviron:orbit-java:0.1.0:linux-x86_64")
 }
 ```
+
+Maven:
 
 ```xml
 <dependency>
@@ -34,49 +42,49 @@ dependencies {
 </dependency>
 ```
 
-The runtime needs an explicit native-access grant. On the class path:
-
-```sh
-java --enable-native-access=ALL-UNNAMED --illegal-native-access=deny \
-  -cp orbit-java.jar:application.jar example.Main
-```
-
-`NativeLibrary.load()` selects the matching native JAR on the class path, checks
-its version, ABI and SHA-256, and extracts a private temporary library that is
-removed when the library closes. There is no runtime download, system-library
-fallback or silent selection between duplicate native resources.
-`NativeLibrary.load(Path)` loads a library you supply yourself.
-
-End-to-end validation covers Linux x86-64; the other platforms are built and
-checked but have not been run end to end.
-
-## Application API
-
-The application supplies every operational budget: completion operations,
-retained body bytes, completion workers, retained HTTP exchanges, pending
-event delivery and pending control notifications. Joining requires a fleet name,
-application name and nonzero incarnation. A fleet name is limited to eight bytes
-by the underlying protocol.
-No request timeout, drain deadline or process termination policy is invented.
+## Use from a Java application
 
 ```java
-try (NativeLibrary library = NativeLibrary.load();
-     NativeRuntime runtime = library.openRuntime(operationBudget, byteBudget, completionWorkers);
-     var executor = Executors.newVirtualThreadPerTaskExecutor();
-     OrbitApplication application = runtime.join(new ApplicationOptions(
-             fleet, name, incarnation, exchangeBudget, eventBudget, controlBudget))) {
-    application.subscribe("example.changed");
-    application.events(event -> consume(event.topic(), event.json()), executor);
-    application.serve(request -> CompletableFuture.completedStage(
-            OrbitResponse.text("Hello, Java!")), executor);
-    waitForApplicationShutdown(); // The embedding application's own signal.
+import dev.claviron.orbit.ApplicationOptions;
+import dev.claviron.orbit.NativeLibrary;
+import dev.claviron.orbit.OrbitResponse;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+
+public final class Main {
+    public static void main(String[] args) throws Exception {
+        var options = new ApplicationOptions("example", "hello", 1, 64, 64, 64);
+        try (var library = NativeLibrary.load();
+             var runtime = library.openRuntime(1024, 16 * 1024 * 1024, 2);
+             var handlers = Executors.newVirtualThreadPerTaskExecutor();
+             var app = runtime.join(options)) {
+            app.serve(request -> CompletableFuture.completedStage(
+                    OrbitResponse.text("Hello from Java")), handlers);
+
+            // Your application's lifecycle decides when to withdraw and drain.
+            Thread.currentThread().join();
+        }
+    }
 }
 ```
 
-The example is schematic: supply the declared variables, imports and application
-callbacks. A complete executable plain Java handler is in
-[examples/plain/PlainApplication.java](examples/plain/PlainApplication.java).
-No framework executor or common pool is chosen by the binding.
+Run it with native access granted:
+
+```sh
+java --enable-native-access=ALL-UNNAMED -cp "libs/*:." Main
+```
+
+See the complete [Java example](examples/plain/PlainApplication.java). The
+library installs no signals and does not own `main`. `"example"` is the fleet, 1–8
+bytes, and `"hello"` the application name; a Claviron edge on the same host routes
+to them. `1` is the incarnation. The caller supplies every budget:
+
+- `ApplicationOptions`: retained HTTP exchanges, pending events, pending controls.
+- `openRuntime`: native operations, retained body bytes, completion workers.
+
+`NativeLibrary.load()` finds the matching native JAR on the class path and checks
+it. Nothing is downloaded at run time. No request timeout, drain deadline or
+process termination policy is invented.
 
 Requests expose the accepted method, absolute URI, HTTP version, repeated byte
 headers and peer-cancellation stage. Handler exceptions before a response is
