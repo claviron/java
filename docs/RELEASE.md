@@ -189,8 +189,9 @@ use an ephemeral fixture key; that key is never used for a real release.
 
 The signed ZIP can be uploaded manually through the Central Publisher Portal,
 including its browser login/2FA, on the publishing machine. An optional API path
-uses a Portal user token supplied only through `CENTRAL_TOKEN_USERNAME` and
-`CENTRAL_TOKEN_PASSWORD`, then an explicitly invoked command:
+uses a Portal user token supplied through `CENTRAL_TOKEN_USERNAME` and
+`CENTRAL_TOKEN_PASSWORD`, in the environment or the checkout's Git-ignored
+`.env`, then an explicitly invoked command:
 
 ```sh
 bash scripts/publish.sh --publish --bundle target/central/0.1.0

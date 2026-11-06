@@ -429,14 +429,25 @@ def sign(folder, key, root=ROOT):
     return archive
 
 
+def central_token(root):
+    """The Portal user token: the environment first, then the checkout's ignored `.env`."""
+    stored = {}
+    path = root / ".env"
+    if path.is_file():
+        for line in path.read_text().splitlines():
+            key, separator, value = line.partition("=")
+            if separator:
+                stored[key.removeprefix("export ").strip()] = value.strip().strip("\"'")
+    return tuple(os.environ.get(name) or stored.get(name) for name in ("CENTRAL_TOKEN_USERNAME", "CENTRAL_TOKEN_PASSWORD"))
+
+
 def publish(folder, root=ROOT):
     """One explicit, USER_MANAGED upload; no polling or automatic release."""
     validate_bundle(folder, root, signed=True)
     archive = bundle_zip(folder, "central-bundle.zip", signed=True)
-    username = os.environ.get("CENTRAL_TOKEN_USERNAME")
-    password = os.environ.get("CENTRAL_TOKEN_PASSWORD")
+    username, password = central_token(root)
     if not username or not password:
-        raise ValueError("Set CENTRAL_TOKEN_USERNAME and CENTRAL_TOKEN_PASSWORD from a Portal user token")
+        raise ValueError("Set CENTRAL_TOKEN_USERNAME and CENTRAL_TOKEN_PASSWORD from a Portal user token, in the environment or .env")
     token = base64.b64encode(f"{username}:{password}".encode()).decode()
     boundary = "orbit-java-" + uuid.uuid4().hex
     prefix = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"bundle\"; filename=\"central-bundle.zip\"\r\n"
