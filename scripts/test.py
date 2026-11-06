@@ -45,10 +45,10 @@ def main():
     run(str(jdk / "bin/jar"), "--create", "--file", str(output / "orbit-java.jar"), "-C", str(classes), ".")
     run(str(jdk / "bin/javac"), "--release", "25", "-Xlint:all", "-Werror", "-cp", str(classes), "-d", str(tests), *map(str, checks))
     run(str(jdk / "bin/java"), "--illegal-native-access=deny",
-        "-cp", os.pathsep.join(map(str, [classes, tests])), "io.claviron.orbit.NativeAccessCheck",
+        "-cp", os.pathsep.join(map(str, [classes, tests])), "dev.claviron.orbit.NativeAccessCheck",
         str(target / "debug/liborbit_java.so"))
     run(str(jdk / "bin/java"), "--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny",
-        "-cp", os.pathsep.join(map(str, [classes, tests])), "io.claviron.orbit.BindingChecks",
+        "-cp", os.pathsep.join(map(str, [classes, tests])), "dev.claviron.orbit.BindingChecks",
         str(target / "debug/liborbit_java.so"), str(target / "debug/liborbit_java_fixture.so"))
     probe = output / "c-layout"
     run(*shlex.split(os.environ.get("CC", "cc")), "-std=c11", "-Wall", "-Wextra", "-Werror",

@@ -2,9 +2,8 @@
 
 The release coordinates configured in `release-config.json` are currently
 `dev.claviron:orbit-java:0.1.0`. They are proposed coordinates, not an available
-Central release. Verify the namespace and review the project, license, developer
-and SCM metadata before a first publication. Java packages remain
-`io.claviron.orbit`; the Maven group is independent of Java package names.
+Central release. Review the project, license, developer and SCM metadata before
+a first publication. Java packages are `dev.claviron.orbit`.
 
 ## Artifacts and targets
 

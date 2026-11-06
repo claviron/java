@@ -124,7 +124,12 @@ def context(root=ROOT):
     if version.endswith("SNAPSHOT"):
         raise ValueError("This release pipeline does not publish snapshots")
     digest = hashlib.sha256()
+    # The native library is built from these alone: Java, scripts and harnesses
+    # change without invalidating a prepared library.
     for path in source_files(root):
+        relative = path.relative_to(root).as_posix()
+        if relative != "Cargo.toml" and not relative.startswith("native/"):
+            continue
         data = path.read_bytes()
         digest.update(str(path.relative_to(root)).encode() + b"\0" + str(len(data)).encode() + b"\0" + data)
     return {"groupId": config["groupId"], "artifactId": config["artifactId"], "version": version,
@@ -244,7 +249,7 @@ def properties(values):
     return "".join(f"{key}={value}\n" for key, value in values.items()).encode()
 
 
-def jar(path, entries, version, module="io.claviron.orbit"):
+def jar(path, entries, version, module="dev.claviron.orbit"):
     manifest = ("Manifest-Version: 1.0\r\n" + (f"Automatic-Module-Name: {module}\r\n" if module else "")
                 + f"Implementation-Version: {version}\r\n\r\n").encode()
     entries = {"META-INF/MANIFEST.MF": manifest, **entries}
@@ -331,7 +336,7 @@ def assemble(root=ROOT, targets=None):
             entries = {base + TARGETS[classifier][1]: data,
                        base + "native.properties": properties({"version": expected["version"], "abi": ABI,
                                                               "classifier": classifier, "sha256": receipt["sha256"]})}
-            jar(repository / f"{stem}-{classifier}.jar", entries, expected["version"], module="io.claviron.orbit.native_" + classifier.replace("-", "_"))
+            jar(repository / f"{stem}-{classifier}.jar", entries, expected["version"], module="dev.claviron.orbit.native_" + classifier.replace("-", "_"))
         (repository / (stem + ".pom")).write_bytes(pom(config, expected))
         artifacts = {str(path.relative_to(output / "repository")): file_sha(path) for path in sorted(repository.iterdir())}
         if context(root) != expected:

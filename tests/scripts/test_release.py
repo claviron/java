@@ -208,7 +208,7 @@ class PackagingChecks(unittest.TestCase):
         cls.classes = Path(cls.temporary.name) / "checks"
         cls.classes.mkdir()
         release.run([release.jdk_tool("javac"), "--release", "25", "-Xlint:all", "-Werror", "-cp", cls.main_jar,
-                     "-d", cls.classes, ROOT / "java/src/test/java/io/claviron/orbit/PackagedLibraryChecks.java"])
+                     "-d", cls.classes, ROOT / "java/src/test/java/dev/claviron/orbit/PackagedLibraryChecks.java"])
 
     @classmethod
     def tearDownClass(cls):
@@ -220,7 +220,7 @@ class PackagingChecks(unittest.TestCase):
             if grant:
                 args += ["--enable-native-access=ALL-UNNAMED"]
             args += ["-cp", os.pathsep.join(map(str, [self.main_jar, self.classes, *jars])),
-                     "io.claviron.orbit.PackagedLibraryChecks", mode, message]
+                     "dev.claviron.orbit.PackagedLibraryChecks", mode, message]
             release.run(args)
 
     def altered(self, kind):

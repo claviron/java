@@ -1,13 +1,13 @@
 package example;
 
-import io.claviron.orbit.ApplicationOptions;
-import io.claviron.orbit.Header;
-import io.claviron.orbit.NativeLibrary;
-import io.claviron.orbit.NativeBuffer;
+import dev.claviron.orbit.ApplicationOptions;
+import dev.claviron.orbit.Header;
+import dev.claviron.orbit.NativeLibrary;
+import dev.claviron.orbit.NativeBuffer;
 import java.lang.foreign.ValueLayout;
-import io.claviron.orbit.NativeRuntime;
-import io.claviron.orbit.OrbitApplication;
-import io.claviron.orbit.OrbitResponse;
+import dev.claviron.orbit.NativeRuntime;
+import dev.claviron.orbit.OrbitApplication;
+import dev.claviron.orbit.OrbitResponse;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;

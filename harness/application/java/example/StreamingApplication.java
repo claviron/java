@@ -1,6 +1,6 @@
 package example;
 
-import io.claviron.orbit.*;
+import dev.claviron.orbit.*;
 import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 import java.util.Arrays;
