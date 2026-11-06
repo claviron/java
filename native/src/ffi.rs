@@ -1,4 +1,4 @@
-//! C pointer contracts are declared in include/orbit_java.h.
+//! C pointer contracts are declared in include/claviron_java.h.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 

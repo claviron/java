@@ -40,7 +40,7 @@ public final class PackagedLibraryChecks {
             check(expected.getMessage().contains(args[1]));
         }
         try (var files = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
-            check(files.noneMatch(path -> path.getFileName().toString().startsWith("orbit-java-")));
+            check(files.noneMatch(path -> path.getFileName().toString().startsWith("claviron-java-")));
         }
         System.out.println("Packaged native check passed: " + args[0]);
     }

@@ -44,8 +44,8 @@ def snapshot(root):
     config = json.loads((root / "release-config.json").read_text())
     config["groupId"] = "org.example"
     config["url"] = "https://example.com"
-    config["scm"] = {"url": "https://example.com/orbit-java", "connection": "scm:git:https://example.com/orbit-java.git",
-                     "developerConnection": "scm:git:https://example.com/orbit-java.git"}
+    config["scm"] = {"url": "https://example.com/claviron-java", "connection": "scm:git:https://example.com/claviron-java.git",
+                     "developerConnection": "scm:git:https://example.com/claviron-java.git"}
     config["developers"] = [{"id": "example", "name": "Example Maintainer"}]
     (root / "release-config.json").write_text(json.dumps(config))
     release.atomic(root / "prebuilds/Cargo.lock", b"fixture dependency snapshot\n")
@@ -62,7 +62,7 @@ def prepared(root, target, data=None):
 
 class ReleaseChecks(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="orbit-java-release-test-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="claviron-java-release-test-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name) / "source"
         self.root.mkdir()
@@ -120,7 +120,7 @@ class ReleaseChecks(unittest.TestCase):
             release.read_native(self.root, target)
 
     def test_hosts_validate_ssh_paths_and_one_builder_per_target(self):
-        host = {"ssh": "builder.example.test", "repository": "/srv/source/orbit-java", "target": "linux-x86_64"}
+        host = {"ssh": "builder.example.test", "repository": "/srv/source/claviron-java", "target": "linux-x86_64"}
         self.assertEqual(remote.hosts({"hosts": {"linux": host}}, [], release)[0]["target"], "linux-x86_64")
         for bad in ({**host, "ssh": "-oProxyCommand=command"}, {**host, "repository": "relative"}, {**host, "jobs": 0}):
             with self.assertRaises(ValueError):
@@ -160,7 +160,7 @@ sys.exit(subprocess.call(['bash','-c',sys.argv[-1].replace('bash -l -c ','bash -
 ''')
         (commands / "rsync").write_text(script + '''import pathlib,shutil,sys
 source=pathlib.Path(sys.argv[-2].split(':',1)[1]); destination=pathlib.Path(sys.argv[-1])
-for name in ('liborbit_java.so','liborbit_java.dylib','release.json'):
+for name in ('libclaviron_java.so','libclaviron_java.dylib','release.json'):
  if (source/name).is_file():shutil.copyfile(source/name,destination/name)
 ''')
         (commands / "cargo").write_text(script + '''import json,os,pathlib,sys
@@ -169,7 +169,7 @@ elif sys.argv[1]=='build':
  target=sys.argv[sys.argv.index('--target')+1]
  folder=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/target/'release';folder.mkdir(parents=True,exist_ok=True)
  data=bytearray(64);data[:6]=b'\\x7fELF\\x02\\x01';data[16:18]=(3).to_bytes(2,'little');data[18:20]=(62).to_bytes(2,'little')
- (folder/'liborbit_java.so').write_bytes(data)
+ (folder/'libclaviron_java.so').write_bytes(data)
 else:sys.exit(1)
 ''')
         for path in commands.iterdir():
@@ -192,7 +192,7 @@ else:sys.exit(1)
 class PackagingChecks(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temporary = tempfile.TemporaryDirectory(prefix="orbit-java-package-test-")
+        cls.temporary = tempfile.TemporaryDirectory(prefix="claviron-java-package-test-")
         cls.root = Path(cls.temporary.name) / "source"
         cls.root.mkdir()
         snapshot(cls.root)
@@ -202,9 +202,9 @@ class PackagingChecks(unittest.TestCase):
             prepared(cls.root, target, data)
         cls.folder = release.assemble(cls.root)
         cls.manifest = release.validate_bundle(cls.folder, cls.root)
-        cls.repository = cls.folder / "repository/org/example/orbit-java/0.1.0"
-        cls.main_jar = cls.repository / "orbit-java-0.1.0.jar"
-        cls.native_jar = cls.repository / ("orbit-java-0.1.0-" + release.selected_target() + ".jar")
+        cls.repository = cls.folder / "repository/org/example/orbit/0.1.0"
+        cls.main_jar = cls.repository / "claviron-java-0.1.0.jar"
+        cls.native_jar = cls.repository / ("claviron-java-0.1.0-" + release.selected_target() + ".jar")
         cls.classes = Path(cls.temporary.name) / "checks"
         cls.classes.mkdir()
         release.run([release.jdk_tool("javac"), "--release", "25", "-Xlint:all", "-Werror", "-cp", cls.main_jar,
@@ -215,7 +215,7 @@ class PackagingChecks(unittest.TestCase):
         cls.temporary.cleanup()
 
     def check_java(self, mode, jars, message="", grant=True):
-        with tempfile.TemporaryDirectory(prefix="orbit-java-consumer-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="claviron-java-consumer-") as temporary:
             args = [release.jdk_tool("java"), "--illegal-native-access=deny", "-Djava.io.tmpdir=" + temporary]
             if grant:
                 args += ["--enable-native-access=ALL-UNNAMED"]
@@ -273,7 +273,7 @@ class PackagingChecks(unittest.TestCase):
     def test_signatures_checksums_and_user_managed_upload_without_network(self):
         if not shutil.which("gpg") or not shutil.which("gpgconf"):
             self.skipTest("gpg/gpgconf unavailable")
-        temporary = tempfile.TemporaryDirectory(prefix="orbit-java-sign-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="claviron-java-sign-test-")
         self.addCleanup(temporary.cleanup)
         home = Path(temporary.name)
         home.chmod(0o700)

@@ -63,14 +63,14 @@ def main():
 
     passed = False
     try:
-        peer = start("peer", [str(target / "debug/orbit-java-application-check"), fleet, edge_fleet, "plain"])
+        peer = start("peer", [str(target / "debug/claviron-java-application-check"), fleet, edge_fleet, "plain"])
         expect(peer, "PEER_READY")
         applications = []
         for tag in ("one", "two"):
             # Test-fixture budgets, not production defaults. No durations or load test.
             process = start(tag, [str(jdk / "bin/java"), "--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny",
                                  "-cp", os.pathsep.join(map(str, [classes, examples])), "example.PlainApplication",
-                                 str(target / "debug/liborbit_java.so"), fleet, "plain", tag, "1", "64", "4194304", "2", "8", "16", "16"])
+                                 str(target / "debug/libclaviron_java.so"), fleet, "plain", tag, "1", "64", "4194304", "2", "8", "16", "16"])
             expect(process, "READY " + tag)
             applications.append(process)
         send(peer, "run")

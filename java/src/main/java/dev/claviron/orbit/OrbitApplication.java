@@ -37,7 +37,7 @@ public final class OrbitApplication implements AutoCloseable {
         this.runtime = runtime;
         api = new ApplicationFfm(runtime.library.ffi);
         handle = runtime.attachApplication(engine -> api.join(engine, options));
-        controlReader = Thread.ofPlatform().name("orbit-java-controls").start(this::readControls);
+        controlReader = Thread.ofPlatform().name("orbit-controls").start(this::readControls);
     }
 
     /** Open an isolated invoke Link; the application owns its generation and drain. */
@@ -149,7 +149,7 @@ public final class OrbitApplication implements AutoCloseable {
     public CompletionStage<Void> serve(Handler handler, Executor executor) {
         synchronized (calls) {
             if (intake != null || withdrawn.get()) throw new IllegalStateException("Application intake already started or closed");
-            intake = Thread.ofPlatform().name("orbit-java-intake").start(() -> {
+            intake = Thread.ofPlatform().name("orbit-intake").start(() -> {
                 Throwable failure = null;
                 try {
                     for (;;) {
@@ -212,7 +212,7 @@ public final class OrbitApplication implements AutoCloseable {
     public CompletionStage<Void> events(Consumer<OrbitEvent> listener, Executor executor) {
         synchronized (calls) {
             if (eventReader != null || withdrawn.get()) throw new IllegalStateException("Event reader already started or closed");
-            eventReader = Thread.ofPlatform().name("orbit-java-events").start(() -> {
+            eventReader = Thread.ofPlatform().name("orbit-events").start(() -> {
                 try {
                     for (;;) {
                         OrbitEvent event = nextEvent().toCompletableFuture().join();

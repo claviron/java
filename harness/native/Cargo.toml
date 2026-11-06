@@ -1,5 +1,5 @@
 [package]
-name = "orbit-java-fixture"
+name = "claviron-java-fixture"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ publish.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-orbit-java-native = { path = "../../native" }
+claviron-java-native = { path = "../../native" }
 
 [lints]
 workspace = true

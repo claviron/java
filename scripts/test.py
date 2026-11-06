@@ -42,14 +42,14 @@ def main():
     sources = sorted((ROOT / "java/src/main/java").rglob("*.java"))
     checks = sorted((ROOT / "java/src/test/java").rglob("*.java"))
     run(str(jdk / "bin/javac"), "--release", "25", "-Xlint:all", "-Werror", "-d", str(classes), *map(str, sources))
-    run(str(jdk / "bin/jar"), "--create", "--file", str(output / "orbit-java.jar"), "-C", str(classes), ".")
+    run(str(jdk / "bin/jar"), "--create", "--file", str(output / "orbit.jar"), "-C", str(classes), ".")
     run(str(jdk / "bin/javac"), "--release", "25", "-Xlint:all", "-Werror", "-cp", str(classes), "-d", str(tests), *map(str, checks))
     run(str(jdk / "bin/java"), "--illegal-native-access=deny",
         "-cp", os.pathsep.join(map(str, [classes, tests])), "dev.claviron.orbit.NativeAccessCheck",
-        str(target / "debug/liborbit_java.so"))
+        str(target / "debug/libclaviron_java.so"))
     run(str(jdk / "bin/java"), "--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny",
         "-cp", os.pathsep.join(map(str, [classes, tests])), "dev.claviron.orbit.BindingChecks",
-        str(target / "debug/liborbit_java.so"), str(target / "debug/liborbit_java_fixture.so"))
+        str(target / "debug/libclaviron_java.so"), str(target / "debug/libclaviron_java_fixture.so"))
     probe = output / "c-layout"
     run(*shlex.split(os.environ.get("CC", "cc")), "-std=c11", "-Wall", "-Wextra", "-Werror",
         "-I", str(ROOT / "native/include"), str(ROOT / "harness/layout.c"), "-o", str(probe))

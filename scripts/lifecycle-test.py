@@ -62,7 +62,7 @@ def main():
         for tag, name in (("one", "life"), ("two", "life"), ("other", "other")):
             app = start(tag, [str(jdk / "bin/java"), "--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny",
                              "-cp", os.pathsep.join(map(str, [classes, checks])), "example.LifecycleApplication",
-                             str(target / "debug/liborbit_java.so"), fleet, name, tag, ready[1]])
+                             str(target / "debug/libclaviron_java.so"), fleet, name, tag, ready[1]])
             expect(app, f"LIFE_READY {tag} {app.pid}")
             all_apps[tag] = app
             if tag != "other": apps[tag] = app

@@ -38,7 +38,7 @@ public final class OrbitInvocations implements AutoCloseable {
     public CompletionStage<Void> serve(Handler handler,Executor executor) {
         synchronized(calls) {
             if(intake!=null || withdrawn) throw new IllegalStateException("Invoke intake already started or closed");
-            intake=Thread.ofPlatform().name("orbit-java-invokes").start(()->{
+            intake=Thread.ofPlatform().name("orbit-invokes").start(()->{
                 Throwable failure=null;
                 try {
                     for(;;) {

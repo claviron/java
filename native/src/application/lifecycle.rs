@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
 use tokio_util::sync::CancellationToken;
 
-pub(super) const TOPIC: &str = "orbit-java.lifecycle.v1";
+pub(super) const TOPIC: &str = "claviron-java.lifecycle.v1";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Action {

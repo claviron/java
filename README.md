@@ -1,4 +1,4 @@
-# orbit-java
+# claviron/java
 
 A Java library for handling Claviron application requests over same-host Orbit
 Link. Your normal Java application imports the library and supplies a request
@@ -41,6 +41,8 @@ Maven:
   <classifier>linux-x86_64</classifier><scope>runtime</scope>
 </dependency>
 ```
+
+The next release moves to the coordinates `dev.claviron:orbit`.
 
 ## Use from a Java application
 
@@ -339,5 +341,5 @@ close synchronously from its own completion callback. Library unload is refused
 while any runtime is attached. Unrecoverable ABI/driver failures retain live
 resources rather than unloading code still in use.
 
-See [the C header](native/include/orbit_java.h) and
+See [the C header](native/include/claviron_java.h) and
 [architecture](ARCHITECTURE.md) for contracts.

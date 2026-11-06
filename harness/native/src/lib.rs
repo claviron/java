@@ -1,7 +1,7 @@
 //! Controlled native producer for FFM tests, not shipped by the production addon.
-use orbit_java_native::{Status, complete_operation, ffi, submit_owned};
+use claviron_java_native::{Status, complete_operation, ffi, submit_owned};
 
-orbit_java_native::export_bindings!();
+claviron_java_native::export_bindings!();
 
 /// # Safety
 /// Input is readable for length bytes; out is aligned, writable and disjoint.

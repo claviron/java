@@ -46,7 +46,7 @@ pub struct ApplicationAbi {
 }
 
 /// # Safety
-/// All pointer/view arguments satisfy orbit_java.h's readability and lifetime rules.
+/// All pointer/view arguments satisfy claviron_java.h's readability and lifetime rules.
 pub unsafe fn abi(
     out: *mut ApplicationAbi,
     size: u32,
@@ -77,7 +77,7 @@ pub unsafe fn abi(
 }
 
 /// # Safety
-/// All pointer/view arguments satisfy orbit_java.h's readability and lifetime rules.
+/// All pointer/view arguments satisfy claviron_java.h's readability and lifetime rules.
 pub unsafe fn join(
     engine: Handle,
     options: *const ApplicationOptions,
@@ -115,7 +115,7 @@ pub unsafe fn join(
 }
 
 /// # Safety
-/// All pointer/view arguments satisfy orbit_java.h's readability and lifetime rules.
+/// All pointer/view arguments satisfy claviron_java.h's readability and lifetime rules.
 pub unsafe fn next(
     id: Handle,
     out: *mut Handle,
@@ -131,7 +131,7 @@ pub unsafe fn next(
 }
 
 /// # Safety
-/// All pointer/view arguments satisfy orbit_java.h's readability and lifetime rules.
+/// All pointer/view arguments satisfy claviron_java.h's readability and lifetime rules.
 pub unsafe fn closed(
     id: Handle,
     out: *mut Handle,
@@ -147,7 +147,7 @@ pub unsafe fn closed(
 }
 
 /// # Safety
-/// Handle belongs to this library; lifetime rules follow orbit_java.h.
+/// Handle belongs to this library; lifetime rules follow claviron_java.h.
 pub unsafe fn withdraw(id: Handle) -> i32 {
     boundary(|| {
         state::application(id)?.withdraw();
@@ -156,7 +156,7 @@ pub unsafe fn withdraw(id: Handle) -> i32 {
 }
 
 /// # Safety
-/// Handle belongs to this library; lifetime rules follow orbit_java.h.
+/// Handle belongs to this library; lifetime rules follow claviron_java.h.
 pub unsafe fn release(id: Handle) -> i32 {
     boundary(|| {
         state::application(id)?.release()?;
@@ -369,7 +369,7 @@ pub unsafe fn finish(
 }
 
 /// # Safety
-/// Handle belongs to this library; lifetime rules follow orbit_java.h.
+/// Handle belongs to this library; lifetime rules follow claviron_java.h.
 pub unsafe fn request_release(id: Handle) -> i32 {
     boundary(|| {
         state::exchange(id)?.abort();
@@ -448,7 +448,7 @@ pub unsafe fn event_info(
 }
 
 /// # Safety
-/// Handle belongs to this library; lifetime rules follow orbit_java.h.
+/// Handle belongs to this library; lifetime rules follow claviron_java.h.
 pub unsafe fn event_release(id: Handle) -> i32 {
     boundary(|| state::remove_event(id))
 }
@@ -569,7 +569,7 @@ pub unsafe fn control_release(id: Handle) -> i32 {
 macro_rules! application_export {
     ($name:ident, $target:ident, ($($argument:ident: $ty:ty),*)) => {
         /// # Safety
-        /// All views and handles satisfy the corresponding orbit_java.h contract.
+        /// All views and handles satisfy the corresponding claviron_java.h contract.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $name($($argument: $ty),*) -> i32 {
             unsafe { $crate::application::ffi::$target($($argument),*) }

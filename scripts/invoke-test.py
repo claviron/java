@@ -45,7 +45,7 @@ def main():
         ready=line(peer).split()
         if ready[0]!="PEER_READY":raise RuntimeError("Missing peer geometry")
         app=start("java",[str(jdk/"bin/java"),"--enable-native-access=ALL-UNNAMED","--illegal-native-access=deny","-cp",
-                          os.pathsep.join(map(str,[classes,checks])),"example.InvokeApplication",str(target/"debug/liborbit_java.so"),fleet,invoke_fleet,ready[1]])
+                          os.pathsep.join(map(str,[classes,checks])),"example.InvokeApplication",str(target/"debug/libclaviron_java.so"),fleet,invoke_fleet,ready[1]])
         expect(app,f"INVOKE_READY {app.pid}")
         send(peer,"run");expect(peer,"BASIC_CHECKS_PASSED")
         send(app,"outgoing-basic");expect(app,"OUTGOING_BASIC_PASSED")

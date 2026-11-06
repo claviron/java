@@ -5,7 +5,7 @@ macro_rules! export_bindings {
         $crate::export_application_bindings!();
         $crate::export_invoke_bindings!();
         /// # Safety
-        /// All pointers obey the corresponding orbit_java.h contract.
+        /// All pointers obey the corresponding claviron_java.h contract.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn oj_abi_query(
             out: *mut $crate::AbiInfo,
@@ -14,7 +14,7 @@ macro_rules! export_bindings {
             unsafe { $crate::ffi::query(out, size) }
         }
         /// # Safety
-        /// All pointers obey the corresponding orbit_java.h contract.
+        /// All pointers obey the corresponding claviron_java.h contract.
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn oj_engine_open(
             options: *const $crate::Options,

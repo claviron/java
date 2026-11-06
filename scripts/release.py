@@ -23,11 +23,11 @@ ROOT = Path(__file__).resolve().parents[1]
 ABI = 3
 JAVA_RELEASE = 25
 TARGETS = {
-    "linux-x86_64": ("x86_64-unknown-linux-gnu", "liborbit_java.so", "x86-64", 62, (0, 3)),
-    "linux-aarch64": ("aarch64-unknown-linux-gnu", "liborbit_java.so", "generic", 183, (0, 3)),
-    "macos-aarch64": ("aarch64-apple-darwin", "liborbit_java.dylib", "generic", None, ()),
-    "freebsd-x86_64": ("x86_64-unknown-freebsd", "liborbit_java.so", "x86-64", 62, (9,)),
-    "freebsd-aarch64": ("aarch64-unknown-freebsd", "liborbit_java.so", "generic", 183, (9,)),
+    "linux-x86_64": ("x86_64-unknown-linux-gnu", "libclaviron_java.so", "x86-64", 62, (0, 3)),
+    "linux-aarch64": ("aarch64-unknown-linux-gnu", "libclaviron_java.so", "generic", 183, (0, 3)),
+    "macos-aarch64": ("aarch64-apple-darwin", "libclaviron_java.dylib", "generic", None, ()),
+    "freebsd-x86_64": ("x86_64-unknown-freebsd", "libclaviron_java.so", "x86-64", 62, (9,)),
+    "freebsd-aarch64": ("aarch64-unknown-freebsd", "libclaviron_java.so", "generic", 183, (9,)),
 }
 TARGET_ALIASES = {
     "linux-x64-gnu": "linux-x86_64",
@@ -147,7 +147,7 @@ def ensure_lock(root=ROOT):
     """Resolve once without the development checkout's ignored Cargo patches."""
     lock = root / "prebuilds/Cargo.lock"
     if not lock.is_file():
-        with tempfile.TemporaryDirectory(prefix="orbit-java-resolve-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="claviron-java-resolve-") as temporary:
             source = Path(temporary).resolve()
             copy_sources(root, source)
             run(["cargo", "generate-lockfile"], cwd=source)
@@ -207,7 +207,7 @@ def prepare(root=ROOT, target=None):
     lock = ensure_lock(root)
     lock_hash = file_sha(lock)
     # Stage outside the checkout so parent .cargo/config.toml cannot inject local patches.
-    with tempfile.TemporaryDirectory(prefix="orbit-java-native-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="claviron-java-native-") as temporary:
         source = Path(temporary).resolve()
         copy_sources(root, source)
         shutil.copyfile(lock, source / "Cargo.lock")
@@ -311,7 +311,7 @@ def assemble(root=ROOT, targets=None):
         raise ValueError("Native preparation incomplete:\n" + "\n".join(errors))
     folder = root / "target/central" / expected["version"]
     folder.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="orbit-java-package-", dir=folder.parent) as temporary:
+    with tempfile.TemporaryDirectory(prefix="claviron-java-package-", dir=folder.parent) as temporary:
         temporary = Path(temporary)
         output = temporary / "bundle"
         repository = output / "repository" / Path(*expected["groupId"].split(".")) / expected["artifactId"] / expected["version"]
@@ -323,16 +323,16 @@ def assemble(root=ROOT, targets=None):
         run([jdk_tool("javadoc"), "--release", str(JAVA_RELEASE), "-quiet", "-Xdoclint:all,-missing", "-notimestamp", "-d", docs, *java])
         stem = f"{expected['artifactId']}-{expected['version']}"
         api = {str(path.relative_to(classes)): path.read_bytes() for path in classes.rglob("*.class")}
-        api["META-INF/orbit-java/api.properties"] = properties({"version": expected["version"], "abi": ABI})
+        api["META-INF/orbit/api.properties"] = properties({"version": expected["version"], "abi": ABI})
         jar(repository / (stem + ".jar"), api, expected["version"])
         source_entries = {str(path.relative_to(root / "java/src/main/java")): path.read_bytes() for path in java}
         for path in source_files(root):
             if path.relative_to(root).parts[0] in ("native", "harness") or path == root / "Cargo.toml":
-                source_entries["META-INF/orbit-java/rust/" + str(path.relative_to(root))] = path.read_bytes()
+                source_entries["META-INF/orbit/rust/" + str(path.relative_to(root))] = path.read_bytes()
         jar(repository / (stem + "-sources.jar"), source_entries, expected["version"], module=None)
         jar(repository / (stem + "-javadoc.jar"), {str(path.relative_to(docs)): path.read_bytes() for path in docs.rglob("*") if path.is_file()}, expected["version"], module=None)
         for classifier, (data, receipt) in natives.items():
-            base = f"META-INF/orbit-java/native/{classifier}/"
+            base = f"META-INF/orbit/native/{classifier}/"
             entries = {base + TARGETS[classifier][1]: data,
                        base + "native.properties": properties({"version": expected["version"], "abi": ABI,
                                                               "classifier": classifier, "sha256": receipt["sha256"]})}
@@ -449,7 +449,7 @@ def publish(folder, root=ROOT):
     if not username or not password:
         raise ValueError("Set CENTRAL_TOKEN_USERNAME and CENTRAL_TOKEN_PASSWORD from a Portal user token, in the environment or .env")
     token = base64.b64encode(f"{username}:{password}".encode()).decode()
-    boundary = "orbit-java-" + uuid.uuid4().hex
+    boundary = "claviron-java-" + uuid.uuid4().hex
     prefix = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"bundle\"; filename=\"central-bundle.zip\"\r\n"
               "Content-Type: application/octet-stream\r\n\r\n").encode()
     suffix = f"\r\n--{boundary}--\r\n".encode()

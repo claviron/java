@@ -37,7 +37,7 @@ final class NativeLoader {
     static Extracted extract() {
         String platform = classifier(System.getProperty("os.name"), System.getProperty("os.arch"));
         ClassLoader loader = NativeLibrary.class.getClassLoader();
-        String base = "META-INF/orbit-java/";
+        String base = "META-INF/orbit/";
         String resource = base + "native/" + platform + "/";
         try {
             Properties api = properties(unique(loader, base + "api.properties"));
@@ -50,9 +50,9 @@ final class NativeLoader {
             }
             String expected = nativeInfo.getProperty("sha256", "");
             if (!expected.matches("[0-9a-f]{64}")) throw new IllegalStateException("Invalid Orbit Java native checksum metadata");
-            String name = platform.startsWith("macos-") ? "liborbit_java.dylib" : "liborbit_java.so";
+            String name = platform.startsWith("macos-") ? "libclaviron_java.dylib" : "libclaviron_java.so";
             URL binary = unique(loader, resource + name);
-            Path directory = Files.createTempDirectory("orbit-java-");
+            Path directory = Files.createTempDirectory("claviron-java-");
             Extracted extracted = new Extracted(directory.resolve(name));
             try {
                 MessageDigest digest = MessageDigest.getInstance("SHA-256");

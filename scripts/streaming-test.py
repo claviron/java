@@ -60,7 +60,7 @@ def main():
             raise RuntimeError("Missing peer geometry")
         app = start("java", [str(jdk / "bin/java"), "--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny",
                              "-cp", os.pathsep.join(map(str, [classes, checks])), "example.StreamingApplication",
-                             str(target / "debug/liborbit_java.so"), fleet, ready[1]])
+                             str(target / "debug/libclaviron_java.so"), fleet, ready[1]])
         expect(app, "STREAM_READY")
         send(peer, "run")
         expect(peer, "WRITE_HEAD"); expect(app, "WRITE_BLOCKED"); send(peer, "read")

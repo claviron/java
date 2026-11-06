@@ -63,7 +63,7 @@ pub struct Application {
 }
 
 fn transport(error: impl std::fmt::Display) -> Status {
-    eprintln!("orbit-java: {error}");
+    eprintln!("orbit: {error}");
     Status::Transport
 }
 
@@ -116,7 +116,7 @@ impl Application {
         let (started, receiving) = std::sync::mpsc::sync_channel(1);
         let application = Arc::clone(&owner);
         let thread = std::thread::Builder::new()
-            .name("orbit-java-io".into())
+            .name("orbit-io".into())
             .spawn(move || {
                 let runtime =
                     match tokio::runtime::Builder::new_current_thread()

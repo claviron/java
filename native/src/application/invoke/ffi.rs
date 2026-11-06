@@ -294,7 +294,7 @@ pub unsafe fn result_release(id: Handle) -> i32 {
 macro_rules! invoke_export {
     ($name:ident,$target:ident,($($argument:ident:$ty:ty),*))=>{
         /// # Safety
-        /// Arguments obey the corresponding orbit_java.h contract.
+        /// Arguments obey the corresponding claviron_java.h contract.
         #[unsafe(no_mangle)] pub unsafe extern "C" fn $name($($argument:$ty),*)->i32 {
             unsafe{$crate::application::invoke::ffi::$target($($argument),*)}
         }

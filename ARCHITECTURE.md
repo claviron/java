@@ -1,9 +1,9 @@
-# orbit-java architecture
+# claviron-java architecture
 
 The JVM is a separate application process. The native library consumes Orbit
 through the public Claviron facade. Application transport (HTTP and application
 events) is the first connection mode; the invoke command/result protocol uses a separate application-owned service
-Link. It never adds a second reader to an application lane. orbit-js is a behavioral reference, never a dependency.
+Link. It never adds a second reader to an application lane. claviron-js is a behavioral reference, never a dependency.
 
 ## Application transport implementation
 

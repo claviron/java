@@ -1,6 +1,6 @@
 {
   "groupId": "dev.claviron",
-  "artifactId": "orbit-java",
+  "artifactId": "orbit",
   "name": "Orbit Java",
   "description": "Framework-independent Java FFM bindings for Claviron Orbit Link",
   "url": "https://claviron.dev",

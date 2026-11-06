@@ -364,7 +364,7 @@ pub(super) fn publish_status(application: &Application) -> Result<()> {
             ),
             placements: vec![FleetApplicationPlacement {
                 description: ApplicationDescription::new("java", "http")
-                    .runner("orbit-java"),
+                    .runner("claviron-java"),
                 member,
                 lifecycle: if state.running != 0 {
                     ApplicationLifecycle::Running
