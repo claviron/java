@@ -3,7 +3,7 @@
 Framework-independent Java application bindings for Claviron's same-host Orbit
 Link. The Java application runs in a separate JVM. The native library consumes
 Claviron through its public facade; Claviron does not embed Java or depend on
-this binding. This source tree is not published yet.
+this binding.
 
 The implementation joins a named application as a `java` lane, serves HTTP with
 incremental uploads and streaming responses, and shares ApplicationEvents. It
@@ -11,95 +11,44 @@ supports application generations and bidirectional invokes on a separate,
 application-owned Link. Close drains owned work. The binding uses JDK FFM,
 without JNI, preview APIs or a Java framework.
 
-## Requirements and validation
+## Install
 
-- JDK 25 LTS.
-- Stable Rust 1.98 or later and a C11 compiler.
-- Python 3.11+ for the dependency-free build/check and release scripts.
-- Linux x86-64 is the currently validated native/FFM platform.
+Requires JDK 25 LTS. Packages are on Maven Central. Add the API and the native
+library of the platform you deploy on, one of `linux-x86_64`, `linux-aarch64`,
+`macos-aarch64`, `freebsd-x86_64` or `freebsd-aarch64`:
 
-Set `JAVA_HOME` to a JDK 25 installation, then run:
-
-```sh
-python3 scripts/test.py
-python3 scripts/application-test.py --skip-build
-python3 scripts/streaming-test.py --skip-build
-python3 scripts/lifecycle-test.py --skip-build
-python3 scripts/invoke-test.py --skip-build
+```kotlin
+dependencies {
+    implementation("dev.claviron:orbit-java:0.1.0")
+    runtimeOnly("dev.claviron:orbit-java:0.1.0:linux-x86_64")
+}
 ```
 
-The first script checks Rust formatting, lints and tests the workspace, builds
-the shared libraries, compiles Java with warnings treated as errors, packages
-the production JAR, and checks FFM behavior and C ABI layout. It starts no server,
-fleet or load test. `CARGO_TARGET_DIR`, `JAVA_HOME` and `CC` are respected; PATH
-is not rewritten. `--skip-rust-checks` reuses already completed Rust checks.
-
-The application script requires the `orbit` CLI on PATH for cleanup. It starts
-one Rust acceptance peer and two JVM applications in fresh, isolated SHM fleets.
-It checks HTTP on both instances, raw URI/query and ordered byte headers, handler
-failure, idle peer cancellation, sibling event sharing, Edge event forwarding,
-unsubscribe and graceful drain. It opens no public listener and applies no load.
-Only its own fleets are cleared, after all its child processes have exited.
-Omit `--skip-build` to run foundation checks and the build first.
-
-The streaming script uses another fresh fleet and a separate JVM. A response
-larger than Link's configured ring must remain pending while its reader is held
-back. It checks byte ownership, rejection of concurrent reads/writes, capacity
-rejection without corrupting stream state, cancellation of blocked operations,
-producer failure after the head, empty-body EOF, large binary full-duplex echo,
-and application close while accepted upload/response work is still pending.
-Readiness and explicit control messages coordinate these cases; no sleeps,
-invented deadlines or load tests are used.
-
-Artifacts:
-
-- `target/debug/liborbit_java.so`: production native binding.
-- `target/debug/liborbit_java_fixture.so`: test-only producer.
-- `java/build/orbit-java.jar`: production Java classes, without fixture/test code.
+```xml
+<dependency>
+  <groupId>dev.claviron</groupId><artifactId>orbit-java</artifactId><version>0.1.0</version>
+</dependency>
+<dependency>
+  <groupId>dev.claviron</groupId><artifactId>orbit-java</artifactId><version>0.1.0</version>
+  <classifier>linux-x86_64</classifier><scope>runtime</scope>
+</dependency>
+```
 
 The runtime needs an explicit native-access grant. On the class path:
 
 ```sh
-"$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED \
-  --illegal-native-access=deny -cp orbit-java.jar:application.jar example.Main
+java --enable-native-access=ALL-UNNAMED --illegal-native-access=deny \
+  -cp orbit-java.jar:application.jar example.Main
 ```
 
-For the development artifacts above, pass the library path to
-`NativeLibrary.load(Path)`. Maven packages also support `NativeLibrary.load()`:
-it selects a matching native classifier JAR already present on the classpath,
-checks version/ABI/SHA-256, and extracts a private temporary library. Library
-close unloads it before removing the extracted file. Failed loads also clean up.
-A live runtime prevents unloading. There is no runtime download, system-library
+`NativeLibrary.load()` selects the matching native JAR on the class path, checks
+its version, ABI and SHA-256, and extracts a private temporary library that is
+removed when the library closes. There is no runtime download, system-library
 fallback or silent selection between duplicate native resources.
+`NativeLibrary.load(Path)` loads a library you supply yourself.
 
-## Maven packages and release preparation
-
-The source release pipeline now prepares a platform-neutral Java JAR, sources,
-Javadoc, POM and five native classifier JARs: Linux amd64/arm64, macOS arm64,
-and FreeBSD amd64/arm64. Proposed coordinates are
-`dev.claviron:orbit-java:0.1.0`; no Maven Central release is available yet.
-Native binaries and their source/dependency receipts live in ignored
-`prebuilds/`. Build targets use portable CPU baselines.
-
-```sh
-bash scripts/publish.sh --prepare
-# Preview the locally prepared target without requiring other platforms:
-bash scripts/publish.sh --package --target linux-x86_64
-# A full unsigned preview requires all five prepared targets:
-bash scripts/publish.sh --dry-run
-```
-
-`scripts/build-all.sh` prepares isolated remote clones and collects verified
-artifacts using an ignored `.hosts` file based on `.hosts.example`.
-`scripts/sync.sh` collects separately prepared artifacts. Signing and Portal
-upload are explicit later operations on the publishing machine; preparation and
-preview never publish. The workflow supports macOS as the publishing machine,
-including a manually uploaded signed bundle and browser login/2FA.
-
-See [the release workflow](docs/RELEASE.md) for target triples, source/dependency
-provenance, native loader behavior, downstream dependency examples, remote
-builders and signing. Only Linux x86-64 native execution is currently validated;
-the other four targets require builds and validation on their own platforms.
+End-to-end validation covers Linux x86-64; the other platforms are built and
+checked but have not been run end to end.
 
 ## Application API
 
@@ -111,7 +60,7 @@ by the underlying protocol.
 No request timeout, drain deadline or process termination policy is invented.
 
 ```java
-try (NativeLibrary library = NativeLibrary.load(libraryPath);
+try (NativeLibrary library = NativeLibrary.load();
      NativeRuntime runtime = library.openRuntime(operationBudget, byteBudget, completionWorkers);
      var executor = Executors.newVirtualThreadPerTaskExecutor();
      OrbitApplication application = runtime.join(new ApplicationOptions(
@@ -127,8 +76,7 @@ try (NativeLibrary library = NativeLibrary.load(libraryPath);
 The example is schematic: supply the declared variables, imports and application
 callbacks. A complete executable plain Java handler is in
 [examples/plain/PlainApplication.java](examples/plain/PlainApplication.java).
-`scripts/application-test.py` compiles and exercises it with explicit fixture
-budgets. No framework executor or common pool is chosen by the binding.
+No framework executor or common pool is chosen by the binding.
 
 Requests expose the accepted method, absolute URI, HTTP version, repeated byte
 headers and peer-cancellation stage. Handler exceptions before a response is
@@ -271,15 +219,6 @@ application stop/restart explicitly retires its generation. Close joins the nati
 host, not the JVM or an executor owned by the application. Call close outside
 handler/event/control callbacks; those callbacks can safely request withdrawal.
 
-`scripts/lifecycle-test.py` runs two sibling JVMs and one unrelated application in
-a fresh fleet. It checks unchanged process/lane/incarnation identity, exact target
-filtering, stopped-request 503 without handler calls, old signal cancellation,
-idempotent start, restart of blocked reads/writes, ignored late responses, local
-restart fanout, status generations and closure with cancelled handler futures
-still pending. A blocked user-event callback with a full delivery queue remains
-blocked through stop/start, proving independent control progress. All owned
-processes exit before cleanup of that test fleet. No load test is involved.
-
 ## Invokes on an application-owned service Link
 
 Invoke is a separate command/result protocol, not an HTTP request. Open it once
@@ -359,19 +298,11 @@ request/result encoding and write storage remain separately bounded by the
 configured invoke limits and accepted-call count; the FFM byte budget is not a
 process RSS bound. No end-to-end zero-copy claim is made.
 
-`scripts/invoke-test.py` starts a plain JVM and Rust peer with fresh application
-and invoke fleets. It verifies both call directions, binary/UTF-8 operation data,
-error distinctions, capacity rejection, caller cancellation without remote
-rollback, generation cancellation in both directions, ignored late replies,
-HTTP progress while invoke is saturated, unchanged endpoint incarnation and a
-graceful nested invoke drain. Only its own exited children/fleets are cleaned up;
-no load test is run.
-
 ## FFM ownership and completion
 
 The C ABI is version 3. Application options now require `controlCapacity`, request
 metadata includes its generation, and control/state records have checked layouts.
-Rebuild the native library and JAR together; older ABI versions are rejected.
+Use the native library and JAR of one version together; older ABI versions are rejected.
 `OJ_CAP_STREAMING`, `OJ_CAP_LIFECYCLE` and the additive `OJ_CAP_INVOKE`
 describe supported operations. Invoke layouts have their own checked query;
 existing ABI 3 records are unchanged by invoke support.
@@ -400,6 +331,5 @@ close synchronously from its own completion callback. Library unload is refused
 while any runtime is attached. Unrecoverable ABI/driver failures retain live
 resources rather than unloading code still in use.
 
-See [the C header](native/include/orbit_java.h),
-[architecture](ARCHITECTURE.md) and [release workflow](docs/RELEASE.md) for contracts
-and remaining release work.
+See [the C header](native/include/orbit_java.h) and
+[architecture](ARCHITECTURE.md) for contracts.
