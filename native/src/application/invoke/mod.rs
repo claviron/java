@@ -100,7 +100,7 @@ impl Invocations {
         application: Arc<Application>,
         settings: Settings,
     ) -> Result<Handle> {
-        use claviron::orbit::transport::TRANSPORT_LINK_SPEC;
+        use claviron::orbit::link::application::LINK_SPEC;
         if application.stop.is_cancelled() {
             return Err(Status::Closed);
         }
@@ -112,7 +112,7 @@ impl Invocations {
             .map_err(|_| Status::InvalidArgument)?;
         settings
             .limits
-            .validate(TRANSPORT_LINK_SPEC.inbox.payload_capacity)
+            .validate(LINK_SPEC.inbox.payload_capacity)
             .map_err(transport)?;
         if settings.limits.accepted_calls > tokio::sync::Semaphore::MAX_PERMITS
         {
@@ -173,7 +173,7 @@ impl Invocations {
     ) -> Result<()> {
         let connection = Connection::open(
             &settings.fleet,
-            claviron::orbit::transport::TRANSPORT_LINK_SPEC,
+            claviron::orbit::link::application::LINK_SPEC,
             &settings.service,
             "invoke",
             self.application.settings.incarnation,

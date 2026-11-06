@@ -1,4 +1,6 @@
-use claviron::orbit::transport::{Exchange as Frame, ExchangeReply, Headers};
+use claviron::orbit::link::application::{
+    Exchange as Frame, ExchangeReply, Headers,
+};
 use claviron::orbitive::stream::{ReadHalf, WriteHalf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};

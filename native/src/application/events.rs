@@ -5,7 +5,7 @@ use std::time::SystemTime;
 use claviron::app::{
     APPLICATION_EVENT_TOPIC, ApplicationEvent, EventValue, link_routing_key,
 };
-use claviron::orbit::transport::{EDGE_RUNTIME, TransportSegment};
+use claviron::orbit::link::application::{ApplicationSegment, EDGE_RUNTIME};
 use claviron::orbit::{ApplicationEventLayout, FleetEventCodec};
 use claviron::orbitive::Fleet;
 use claviron::orbitive::events::FleetEventBus;
@@ -55,7 +55,7 @@ impl Events {
     pub(super) fn new(
         fleet: Arc<Fleet>,
         name: &str,
-        segment: &TransportSegment,
+        segment: &ApplicationSegment,
         lane: usize,
         capacity: usize,
         application: std::sync::Weak<Application>,

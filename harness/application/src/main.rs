@@ -7,8 +7,8 @@ use std::sync::Arc;
 use claviron::app::{
     APPLICATION_EVENT_TOPIC, ApplicationEvent, EventValue, link_routing_key,
 };
-use claviron::orbit::transport::{
-    Exchange, ExchangeReply, Received, TransportClient, TransportSegment,
+use claviron::orbit::link::application::{
+    ApplicationClient, ApplicationSegment, Exchange, ExchangeReply, Received,
 };
 use claviron::orbit::{ApplicationEventLayout, FleetEventCodec};
 use claviron::orbitive::events::{FleetEventBus, FleetEventCursor};
@@ -111,7 +111,7 @@ impl Watcher {
 }
 
 async fn request(
-    client: &TransportClient,
+    client: &ApplicationClient,
     application: &str,
     path: &[u8],
     query: &[u8],
@@ -151,7 +151,7 @@ async fn main() -> Result<()> {
     if args.len() != 3 {
         return Err("usage: application-check <application-fleet> <edge-event-fleet> <application-name>".into());
     }
-    let segment = Arc::new(TransportSegment::for_fleet(&args[0])?);
+    let segment = Arc::new(ApplicationSegment::for_fleet(&args[0])?);
     let joined = segment.join("event-peer", "edge", 1)?;
     let fleet = Arc::new(Fleet::join_shm_as(&args[1], 1, NodeId::new(0))?);
     let bus =
@@ -196,7 +196,7 @@ async fn main() -> Result<()> {
     let driver = tokio::spawn(async move {
         tokio::select! { () = stopping.cancelled() => Ok::<_, Error>(()), value = forwarding.drive() => { value?; Ok(()) } }
     });
-    let client = TransportClient::join(&args[0], "http-peer", 1)?;
+    let client = ApplicationClient::join(&args[0], "http-peer", 1)?;
     let mut input = BufReader::new(tokio::io::stdin()).lines();
     announce("PEER_READY")?;
     if input.next_line().await?.as_deref() != Some("run") {

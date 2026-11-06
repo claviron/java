@@ -256,7 +256,7 @@ unsafe fn response(
     boundary(|| {
         output(out)?;
         let limit =
-            claviron::orbit::transport::TRANSPORT_INBOX_PAYLOAD_CAPACITY;
+            claviron::orbit::link::application::LINK_INBOX_PAYLOAD_CAPACITY;
         if count > limit as u64 || status > u16::MAX as u32 {
             return Err(Status::InvalidArgument);
         }

@@ -1,6 +1,6 @@
 //! Isolated real-Link streaming acceptance. No listener, load test or timers.
-use claviron::orbit::transport::{
-    Exchange, Pending, TRANSPORT_BUFFER_BYTES, TransportClient,
+use claviron::orbit::link::application::{
+    ApplicationClient, Exchange, LINK_BUFFER_BYTES, Pending,
 };
 use std::io::Write;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -12,7 +12,7 @@ fn signal(value: &str) -> Result<()> {
     Ok(())
 }
 fn send(
-    client: &TransportClient,
+    client: &ApplicationClient,
     path: &[u8],
     upload: bool,
 ) -> Result<Pending> {
@@ -40,9 +40,9 @@ async fn command(
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let fleet = std::env::args().nth(1).ok_or("usage: streaming <fleet>")?;
-    let client = TransportClient::join(&fleet, "stream-peer", 1)?;
+    let client = ApplicationClient::join(&fleet, "stream-peer", 1)?;
     let transfer =
-        TRANSPORT_BUFFER_BYTES.checked_mul(4).ok_or("transfer overflow")?;
+        LINK_BUFFER_BYTES.checked_mul(4).ok_or("transfer overflow")?;
     signal(&format!("PEER_READY {transfer}"))?;
     let mut input = BufReader::new(tokio::io::stdin()).lines();
     command(&mut input, "run").await?;

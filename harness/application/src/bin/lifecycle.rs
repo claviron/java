@@ -1,9 +1,9 @@
 //! Lifecycle controls across sibling JVMs, using the existing application wire protocol.
 use claviron::app::fleet::decode_link_snapshot_rows;
-use claviron::orbit::transport::{
-    ApplicationStateNotice, ControlCommand, ControlTarget, Exchange, FrameKind,
-    Peer, Received, ShutdownNotice, TRANSPORT_BUFFER_BYTES, TransportClient,
-    TransportSegment, frame_kind,
+use claviron::orbit::link::application::{
+    ApplicationClient, ApplicationSegment, ApplicationStateNotice,
+    ControlCommand, ControlTarget, Exchange, FrameKind, LINK_BUFFER_BYTES,
+    Peer, Received, ShutdownNotice, frame_kind,
 };
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
@@ -41,11 +41,11 @@ fn control(
     }
 }
 fn send(
-    client: &TransportClient,
+    client: &ApplicationClient,
     name: &str,
     path: &str,
     body: bool,
-) -> Result<claviron::orbit::transport::Pending> {
+) -> Result<claviron::orbit::link::application::Pending> {
     Ok(client.send(
         name,
         Exchange {
@@ -59,7 +59,7 @@ fn send(
     )?)
 }
 async fn healthy(
-    client: &TransportClient,
+    client: &ApplicationClient,
     name: &str,
     generation: u64,
     instances: usize,
@@ -128,14 +128,14 @@ impl Reports {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let fleet = std::env::args().nth(1).ok_or("usage: lifecycle <fleet>")?;
-    let segment = TransportSegment::for_fleet(&fleet)?;
+    let segment = ApplicationSegment::for_fleet(&fleet)?;
     let observer = segment.join("status-peer", "edge", 1)?;
     let mut reports = Reports {
         receiver: segment.receiver(observer.lane)?,
         states: HashMap::new(),
     };
-    let client = TransportClient::join(&fleet, "http-peer", 1)?;
-    signal(&format!("PEER_READY {}", TRANSPORT_BUFFER_BYTES * 4))?;
+    let client = ApplicationClient::join(&fleet, "http-peer", 1)?;
+    signal(&format!("PEER_READY {}", LINK_BUFFER_BYTES * 4))?;
     let mut input = BufReader::new(tokio::io::stdin()).lines();
     command(&mut input, "run").await?;
     let peers = client.applications();

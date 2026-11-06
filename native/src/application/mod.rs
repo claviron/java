@@ -7,8 +7,8 @@ pub mod invoke;
 pub mod lifecycle;
 
 use async_trait::async_trait;
-use claviron::orbit::transport::{
-    FrameKind, Received, TransportBodies, TransportSegment, frame_kind,
+use claviron::orbit::link::application::{
+    ApplicationBodies, ApplicationSegment, FrameKind, Received, frame_kind,
 };
 use claviron::orbitive::Fleet;
 use claviron::runtime::{RunContext, Runnable};
@@ -32,8 +32,8 @@ pub(crate) struct Settings {
 }
 
 struct Data {
-    segment: Arc<TransportSegment>,
-    bodies: TransportBodies,
+    segment: Arc<ApplicationSegment>,
+    bodies: ApplicationBodies,
     events: Arc<events::Events>,
     lane: usize,
     hold: Mutex<Option<claviron::orbitive::shm::LaneHold>>,
@@ -84,7 +84,7 @@ impl Application {
         }
         claviron::orbitive::FleetName::try_new(&*settings.fleet)
             .map_err(|_| Status::InvalidArgument)?;
-        claviron::orbit::transport::segment::check_application_name(
+        claviron::orbit::link::application::segment::check_application_name(
             &settings.name,
         )
         .map_err(|_| Status::InvalidArgument)?;
@@ -345,13 +345,13 @@ impl Driver {
     ) -> Result<()> {
         let app = &self.application;
         let segment = Arc::new(
-            TransportSegment::for_fleet(&app.settings.fleet)
+            ApplicationSegment::for_fleet(&app.settings.fleet)
                 .map_err(transport)?,
         );
         let joined = segment
             .join(&app.settings.name, "java", app.settings.incarnation)
             .map_err(transport)?;
-        let bodies = TransportBodies::for_segment(
+        let bodies = ApplicationBodies::for_segment(
             &segment,
             joined.lane,
             app.settings.incarnation,
@@ -362,7 +362,7 @@ impl Driver {
         let fleet = Arc::new(
             Fleet::join_shm_as(
                 &app.settings.fleet,
-                claviron::orbit::transport::TRANSPORT_FLEET_CAPACITY as u16,
+                claviron::orbit::link::application::LINK_FLEET_CAPACITY as u16,
                 claviron::orbitive::NodeId::new(joined.lane as u16),
             )
             .map_err(transport)?,
@@ -404,7 +404,7 @@ impl Driver {
                         FrameKind::Request => self.accept(&frame).await?,
                         FrameKind::Control => self.control(&frame)?,
                         FrameKind::ShutdownInitiated => {
-                            let notice = claviron::orbit::transport::ShutdownNotice::decode(&frame).map_err(transport)?;
+                            let notice = claviron::orbit::link::application::ShutdownNotice::decode(&frame).map_err(transport)?;
                             app.lifecycle.notify(
                                 3,
                                 "".into(),
@@ -449,7 +449,7 @@ impl Driver {
         bytes: &[u8],
     ) -> Result<()> {
         let app = &self.application;
-        let frame = claviron::orbit::transport::Exchange::decode(bytes)
+        let frame = claviron::orbit::link::application::Exchange::decode(bytes)
             .map_err(transport)?;
         let Some(generation) = app.lifecycle.capture()? else {
             http::refuse(app, frame, 503)?;
@@ -485,8 +485,9 @@ impl Driver {
         &self,
         bytes: &[u8],
     ) -> Result<()> {
-        let command = claviron::orbit::transport::ControlCommand::decode(bytes)
-            .map_err(transport)?;
+        let command =
+            claviron::orbit::link::application::ControlCommand::decode(bytes)
+                .map_err(transport)?;
         let app = &self.application;
         if command.application != *app.settings.name {
             return Ok(());
