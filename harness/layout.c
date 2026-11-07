@@ -19,7 +19,7 @@ _Static_assert(sizeof(oj_header) == 32, "header pair size");
 _Static_assert(sizeof(oj_application_options) == 72, "application options size");
 _Static_assert(offsetof(oj_application_options, fleet) == 40, "fleet view offset");
 _Static_assert(sizeof(oj_application_layout) == 48, "application layout query size");
-_Static_assert(sizeof(oj_request_record) == 56, "request info size");
+_Static_assert(sizeof(oj_request_record) == 64, "request info size");
 _Static_assert(offsetof(oj_request_record, header_count) == 40, "header count offset");
 _Static_assert(sizeof(oj_event_record) == 48, "event info size");
 _Static_assert(offsetof(oj_completion, resource) == 24, "resource transfer offset");
@@ -29,6 +29,7 @@ _Static_assert(sizeof(oj_control_record) == 72, "control record size");
 _Static_assert(offsetof(oj_control_record, name) == 24, "control name offset");
 _Static_assert(offsetof(oj_control_record, edge) == 56, "control edge offset");
 _Static_assert(offsetof(oj_request_record, generation) == 48, "request generation offset");
+_Static_assert(offsetof(oj_request_record, session) == 56, "request session offset");
 
 _Static_assert(sizeof(oj_invoke_options) == 80, "invoke options size");
 _Static_assert(offsetof(oj_invoke_options, fleet) == 48, "invoke fleet offset");

@@ -127,9 +127,10 @@ No cleanup correctness depends on finalizers, Cleaner, process exit or GC.
 
 Production application operations include request/event intake, response
 completion, terminal observation, generation retirement, control delivery and
-application drain. ABI version 3 keeps buffer/resource completions and adds an
-explicit control budget, generation request metadata and checked control/state
-records. The Java/native pair rejects mismatched ABI versions before joining.
+application drain. ABI version 4 keeps buffer/resource completions, an explicit
+control budget, generation request metadata and checked control/state records, and
+adds message sessions: a receive's lease carries one message's kind, close code and
+data. The Java/native pair rejects mismatched ABI versions before joining.
 The separate test fixture still admits controlled byte payloads and cannot be
 loaded as a production producer by accident.
 

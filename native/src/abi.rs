@@ -1,5 +1,5 @@
 /// Revision of the C records and function contracts; not an Orbit wire version.
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;
 /// ABI capability bit for ownership and completions, without Link/HTTP support.
 pub const FOUNDATION: u64 = 1;
 /// Application HTTP transport and subscription capabilities, not raw service invoke.
@@ -10,6 +10,8 @@ pub const STREAMING: u64 = 4;
 pub const LIFECYCLE: u64 = 8;
 /// Generation-owned invokes on a separate service Link.
 pub const INVOKE: u64 = 16;
+/// WebSocket and WebTransport message sessions.
+pub const SESSIONS: u64 = 32;
 
 pub type Handle = u64;
 pub type Result<T> = std::result::Result<T, Status>;
@@ -76,7 +78,12 @@ pub(crate) fn info() -> AbiInfo {
     AbiInfo {
         struct_size: size_of::<AbiInfo>() as u32,
         abi_version: ABI_VERSION,
-        capabilities: FOUNDATION | APPLICATION | STREAMING | LIFECYCLE | INVOKE,
+        capabilities: FOUNDATION
+            | APPLICATION
+            | STREAMING
+            | LIFECYCLE
+            | INVOKE
+            | SESSIONS,
         options_size: size_of::<Options>() as u32,
         options_align: align_of::<Options>() as u32,
         completion_size: size_of::<Completion>() as u32,
@@ -121,6 +128,7 @@ pub struct RequestInfo {
     pub uri: ByteView,
     pub header_count: u64,
     pub generation: u64,
+    pub session: u64,
 }
 
 #[repr(C)]

@@ -7,12 +7,13 @@ extern "C" {
 #endif
 
 /* Protocol constants, not operational defaults. ABI v3 supports 64-bit targets. */
-#define OJ_ABI_VERSION UINT32_C(3)
+#define OJ_ABI_VERSION UINT32_C(4)
 #define OJ_CAP_FOUNDATION UINT64_C(1)
 #define OJ_CAP_APPLICATION UINT64_C(2)
 #define OJ_CAP_STREAMING UINT64_C(4)
 #define OJ_CAP_LIFECYCLE UINT64_C(8)
 #define OJ_CAP_INVOKE UINT64_C(16)
+#define OJ_CAP_SESSIONS UINT64_C(32)
 typedef uint64_t oj_handle;
 enum oj_status {
     OJ_OK = 0, OJ_INVALID_ARGUMENT = 1, OJ_INVALID_HANDLE = 2,
@@ -95,7 +96,7 @@ typedef struct {
 typedef struct {
     uint32_t struct_size, http_version;
     oj_bytes method, uri;
-    uint64_t header_count, generation;
+    uint64_t header_count, generation, session;
 } oj_request_record;
 typedef struct { oj_bytes id, topic, json; } oj_event_record;
 
@@ -152,6 +153,18 @@ int32_t oj_response_head(oj_handle exchange, uint32_t status,
                          const oj_header *headers, uint64_t count, oj_handle *operation);
 int32_t oj_response_write(oj_handle exchange, oj_bytes body, oj_handle *operation);
 int32_t oj_response_finish(oj_handle exchange, oj_handle *operation);
+/* A request with session set is a message session: answer it with
+ * oj_session_accept (the Link's 101, never the wire handshake) or a 3xx-5xx
+ * response. Body read/write calls are rejected on it. Each receive reserves the
+ * accepted limit plus 3 bytes until its lease is released; the lease starts with
+ * kind (1 text, 2 binary, 3 close) and a little-endian close code, then the data
+ * or close reason. END is the clean end, and cancelling abandons the session.
+ * A peer's close is answered natively. A send of kind 3 ends this direction. */
+int32_t oj_session_accept(oj_handle exchange, uint32_t max_message_bytes,
+                          const oj_header *headers, uint64_t count, oj_handle *operation);
+int32_t oj_message_read(oj_handle exchange, oj_handle *operation);
+int32_t oj_message_send(oj_handle exchange, uint32_t kind, uint32_t code,
+                        oj_bytes body, oj_handle *operation);
 /* Explicitly abandons any unfinished exchange, wakes its I/O and drops ownership. */
 int32_t oj_request_release(oj_handle exchange);
 /* ApplicationEvent subscription is built in, not the raw service event protocol.

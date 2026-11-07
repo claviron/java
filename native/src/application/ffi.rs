@@ -181,6 +181,7 @@ pub unsafe fn request_info(
                 uri: bytes(exchange.uri.as_bytes()),
                 header_count: exchange.frame.headers.len() as u64,
                 generation: exchange.generation.id,
+                session: u64::from(exchange.frame.upgrade),
             });
         }
         Ok(())
@@ -244,6 +245,95 @@ pub unsafe fn respond(
     unsafe { response(id, status, headers, count, body, out, false) }
 }
 
+unsafe fn owned_headers(
+    headers: *const HeaderView,
+    count: u64,
+) -> Result<claviron::orbit::link::application::Headers> {
+    let limit = claviron::orbit::link::application::LINK_INBOX_PAYLOAD_CAPACITY;
+    if count > limit as u64 {
+        return Err(Status::InvalidArgument);
+    }
+    let views = if count == 0 {
+        &[]
+    } else {
+        output(headers.cast_mut())?;
+        unsafe { std::slice::from_raw_parts(headers, count as usize) }
+    };
+    let mut total = 0usize;
+    let mut owned = Vec::with_capacity(views.len());
+    for view in views {
+        let name = unsafe { input(view.name)? };
+        let value = unsafe { input(view.value)? };
+        total = total
+            .checked_add(name.len())
+            .and_then(|n| n.checked_add(value.len()))
+            .ok_or(Status::InvalidArgument)?;
+        if total > limit {
+            return Err(Status::InvalidArgument);
+        }
+        owned.push((name.to_vec(), value.to_vec()));
+    }
+    Ok(owned)
+}
+
+/// # Safety
+/// Headers are readable through the call; copied before return. Out is writable.
+pub unsafe fn session_accept(
+    id: Handle,
+    max_message_bytes: u32,
+    headers: *const HeaderView,
+    count: u64,
+    out: *mut Handle,
+) -> i32 {
+    boundary(|| {
+        output(out)?;
+        let owned = unsafe { owned_headers(headers, count)? };
+        let operation =
+            state::exchange(id)?.accept_session(max_message_bytes, owned)?;
+        unsafe {
+            out.write(operation);
+        }
+        Ok(())
+    })
+}
+
+/// # Safety
+/// Out is a writable operation handle.
+pub unsafe fn message_read(
+    id: Handle,
+    out: *mut Handle,
+) -> i32 {
+    boundary(|| {
+        output(out)?;
+        let operation = state::exchange(id)?.read_message()?;
+        unsafe {
+            out.write(operation);
+        }
+        Ok(())
+    })
+}
+
+/// # Safety
+/// Body is readable through the call, copied before return; out is writable.
+pub unsafe fn message_send(
+    id: Handle,
+    kind: u32,
+    code: u32,
+    body: ByteView,
+    out: *mut Handle,
+) -> i32 {
+    boundary(|| {
+        output(out)?;
+        let operation =
+            state::exchange(id)?
+                .send_message(kind, code, unsafe { input(body)? })?;
+        unsafe {
+            out.write(operation);
+        }
+        Ok(())
+    })
+}
+
 unsafe fn response(
     id: Handle,
     status: u32,
@@ -255,31 +345,10 @@ unsafe fn response(
 ) -> i32 {
     boundary(|| {
         output(out)?;
-        let limit =
-            claviron::orbit::link::application::LINK_INBOX_PAYLOAD_CAPACITY;
-        if count > limit as u64 || status > u16::MAX as u32 {
+        if status > u16::MAX as u32 {
             return Err(Status::InvalidArgument);
         }
-        let views = if count == 0 {
-            &[]
-        } else {
-            output(headers.cast_mut())?;
-            unsafe { std::slice::from_raw_parts(headers, count as usize) }
-        };
-        let mut total = 0usize;
-        let mut owned = Vec::with_capacity(views.len());
-        for view in views {
-            let name = unsafe { input(view.name)? };
-            let value = unsafe { input(view.value)? };
-            total = total
-                .checked_add(name.len())
-                .and_then(|n| n.checked_add(value.len()))
-                .ok_or(Status::InvalidArgument)?;
-            if total > limit {
-                return Err(Status::InvalidArgument);
-            }
-            owned.push((name.to_vec(), value.to_vec()));
-        }
+        let owned = unsafe { owned_headers(headers, count)? };
         let exchange = state::exchange(id)?;
         let operation = if streaming {
             exchange.head(status as u16, owned)?
@@ -601,6 +670,9 @@ macro_rules! export_application_bindings {
         $crate::application_export!(oj_response_head, head, (id: u64, status: u32, headers: *const $crate::HeaderView, count: u64, out: *mut u64));
         $crate::application_export!(oj_response_write, write, (id: u64, body: $crate::ByteView, out: *mut u64));
         $crate::application_export!(oj_response_finish, finish, (id: u64, out: *mut u64));
+        $crate::application_export!(oj_session_accept, session_accept, (id: u64, max_message_bytes: u32, headers: *const $crate::HeaderView, count: u64, out: *mut u64));
+        $crate::application_export!(oj_message_read, message_read, (id: u64, out: *mut u64));
+        $crate::application_export!(oj_message_send, message_send, (id: u64, kind: u32, code: u32, body: $crate::ByteView, out: *mut u64));
         $crate::application_export!(oj_request_release, request_release, (id: u64));
         $crate::application_export!(oj_event_subscribe, subscribe, (id: u64, topic: $crate::ByteView, enabled: u32));
         $crate::application_export!(oj_event_next, next_event, (id: u64, out: *mut u64));

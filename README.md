@@ -90,7 +90,42 @@ process termination policy is invented.
 
 Requests expose the accepted method, absolute URI, HTTP version, repeated byte
 headers and peer-cancellation stage. Handler exceptions before a response is
-selected produce HTTP 500. Unsupported upgrades are refused.
+selected produce HTTP 500. WebSocket and WebTransport requests go to a separate
+session handler, described below, and never to the HTTP handler.
+
+## WebSocket and WebTransport
+
+Claviron terminates the protocol and the client's connection. Your application
+decides whether to accept, and then exchanges whole messages; it never sees a
+socket, a frame or a handshake. Both protocols use the same API:
+
+```java
+application.serve(handler, offer -> {
+    boolean signedIn = offer.request().headers().stream()
+            .anyMatch(header -> header.name().equalsIgnoreCase("authorization"));
+    if (!signedIn) return offer.reject(401, List.of());
+    return offer.accept(64 * 1024, List.of()).thenCompose(session -> CompletableFuture.runAsync(() -> {
+        for (;;) {
+            OrbitMessage message = session.receive().toCompletableFuture().join();
+            if (message == null || message.kind() == OrbitMessage.Kind.CLOSE) return;
+            session.sendText(message.text()).toCompletableFuture().join();
+        }
+    }, executor));
+}, executor);
+```
+
+The client has not been answered while the handler decides, so authentication
+belongs here and `reject` reaches the client as a real HTTP status. With
+`serve(handler, executor)` these requests are refused with 501. If you call
+`nextRequest()` yourself, `request.sessionRequest()` returns the offer, or null
+for HTTP.
+
+One receive and one send may be pending at a time. A received close is answered
+for you. Completing after `close` ends cleanly; completing without one is reported
+to the client as 1011. A receive reserves the accepted limit from the runtime's byte
+budget until it completes. An accepted session holds one exchange for its whole
+life and keeps `close` joining until it ends, so end long-lived sessions when you
+begin shutting down. Stopping or restarting the application cancels them.
 
 ## Request bodies and streaming responses
 
@@ -310,12 +345,13 @@ process RSS bound. No end-to-end zero-copy claim is made.
 
 ## FFM ownership and completion
 
-The C ABI is version 3. Application options now require `controlCapacity`, request
-metadata includes its generation, and control/state records have checked layouts.
+The C ABI is version 4. Application options require `controlCapacity`, request
+metadata includes its generation and whether it is a session, and control/state
+records have checked layouts.
 Use the native library and JAR of one version together; older ABI versions are rejected.
-`OJ_CAP_STREAMING`, `OJ_CAP_LIFECYCLE` and the additive `OJ_CAP_INVOKE`
-describe supported operations. Invoke layouts have their own checked query;
-existing ABI 3 records are unchanged by invoke support.
+`OJ_CAP_STREAMING`, `OJ_CAP_LIFECYCLE`, `OJ_CAP_SESSIONS` and the additive
+`OJ_CAP_INVOKE` describe supported operations. Invoke layouts have their own checked query;
+existing records are unchanged by invoke support.
 Layout/capability validation happens before resource creation. Handles
 are typed, non-recycled integer identities. Input bytes become native-owned
 before submission returns. A stale or wrong-kind handle is an error.

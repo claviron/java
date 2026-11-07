@@ -23,7 +23,7 @@ import static java.lang.foreign.ValueLayout.JAVA_LONG;
 final class ApplicationFfm {
     private static final MemoryLayout OPTIONS = MemoryLayout.structLayout(
             JAVA_INT, JAVA_INT, JAVA_LONG, JAVA_LONG, JAVA_LONG, JAVA_LONG, Ffm.VIEW, Ffm.VIEW);
-    private static final MemoryLayout INFO = MemoryLayout.structLayout(JAVA_INT, JAVA_INT, Ffm.VIEW, Ffm.VIEW, JAVA_LONG, JAVA_LONG);
+    private static final MemoryLayout INFO = MemoryLayout.structLayout(JAVA_INT, JAVA_INT, Ffm.VIEW, Ffm.VIEW, JAVA_LONG, JAVA_LONG, JAVA_LONG);
     private static final MemoryLayout HEADER = MemoryLayout.structLayout(Ffm.VIEW, Ffm.VIEW);
     private static final MemoryLayout EVENT = MemoryLayout.structLayout(Ffm.VIEW, Ffm.VIEW, Ffm.VIEW);
     private static final MemoryLayout STATE = MemoryLayout.structLayout(JAVA_LONG, JAVA_LONG);
@@ -50,6 +50,9 @@ final class ApplicationFfm {
     private final MethodHandle write;
     final MethodHandle finish;
     private final MethodHandle read;
+    private final MethodHandle sessionAccept;
+    private final MethodHandle messageRead;
+    private final MethodHandle messageSend;
     private final MethodHandle subscribe;
     private final MethodHandle publish;
     final MethodHandle eventNext;
@@ -61,7 +64,7 @@ final class ApplicationFfm {
         try (Arena scratch = Arena.ofConfined()) {
             MemorySegment info = scratch.allocate(Ffm.INFO);
             Ffm.check(ffi.query(info));
-            if ((info.get(JAVA_LONG, 8) & 14) != 14) throw new NativeException(9);
+            if ((info.get(JAVA_LONG, 8) & 46) != 46) throw new NativeException(9);
         }
         state = operation("oj_application_state");
         current = operation("oj_request_current");
@@ -84,6 +87,9 @@ final class ApplicationFfm {
         head = ffi.bind("oj_response_head", FunctionDescriptor.of(JAVA_INT, JAVA_LONG, JAVA_INT, ADDRESS, JAVA_LONG, ADDRESS));
         write = ffi.bind("oj_response_write", FunctionDescriptor.of(JAVA_INT, JAVA_LONG, Ffm.VIEW, ADDRESS));
         finish = operation("oj_response_finish");
+        sessionAccept = ffi.bind("oj_session_accept", FunctionDescriptor.of(JAVA_INT, JAVA_LONG, JAVA_INT, ADDRESS, JAVA_LONG, ADDRESS));
+        messageRead = operation("oj_message_read");
+        messageSend = ffi.bind("oj_message_send", FunctionDescriptor.of(JAVA_INT, JAVA_LONG, JAVA_INT, JAVA_INT, Ffm.VIEW, ADDRESS));
         subscribe = ffi.bind("oj_event_subscribe", FunctionDescriptor.of(JAVA_INT, JAVA_LONG, Ffm.VIEW, JAVA_INT));
         publish = ffi.bind("oj_event_publish", FunctionDescriptor.of(JAVA_INT, JAVA_LONG, Ffm.VIEW, Ffm.VIEW));
         eventNext = operation("oj_event_next");
@@ -128,7 +134,7 @@ final class ApplicationFfm {
         } catch (Throwable failure) { throw Ffm.unexpected(failure); }
     }
 
-    record Metadata(String method, URI uri, String version, List<Header> headers, long generation) {}
+    record Metadata(String method, URI uri, String version, List<Header> headers, long generation, boolean session) {}
 
     Metadata request(long resource) {
         try (Arena scratch = Arena.ofConfined()) {
@@ -149,7 +155,7 @@ final class ApplicationFfm {
                 default -> throw new NativeException(9);
             };
             return new Metadata(decode(copy(info.asSlice(8, 16)), StandardCharsets.UTF_8),
-                    URI.create(decode(copy(info.asSlice(24, 16)), StandardCharsets.UTF_8)), version, List.copyOf(headers), info.get(JAVA_LONG, 48));
+                    URI.create(decode(copy(info.asSlice(24, 16)), StandardCharsets.UTF_8)), version, List.copyOf(headers), info.get(JAVA_LONG, 48), info.get(JAVA_LONG, 56) != 0);
         } catch (Throwable failure) { throw Ffm.unexpected(failure); }
     }
 
@@ -180,16 +186,44 @@ final class ApplicationFfm {
         return response(resource, status, headers, null);
     }
 
+    private static MemorySegment entries(Arena scratch, List<Header> headers) {
+        long count = headers.size();
+        MemorySegment entries = scratch.allocate(count * HEADER.byteSize(), HEADER.byteAlignment());
+        for (int index = 0; index < count; index++) {
+            Header header = headers.get(index);
+            MemorySegment value = entries.asSlice(index * HEADER.byteSize(), HEADER.byteSize());
+            put(value.asSlice(0, 16), scratch, utf8(header.name()));
+            put(value.asSlice(16, 16), scratch, header.bytes());
+        }
+        return entries;
+    }
+
+    long acceptSession(long resource, int maxMessageBytes, List<Header> headers) {
+        try (Arena scratch = Arena.ofConfined()) {
+            MemorySegment values = entries(scratch, headers);
+            long count = headers.size();
+            MemorySegment out = scratch.allocate(JAVA_LONG);
+            Ffm.check((int) sessionAccept.invokeExact(resource, maxMessageBytes, values, count, out));
+            return out.get(JAVA_LONG, 0);
+        } catch (Throwable failure) { throw Ffm.unexpected(failure); }
+    }
+
+    long readMessage(long resource) { return operation(messageRead, resource); }
+
+    long sendMessage(long resource, int kind, int code, byte[] bytes) {
+        try (Arena scratch = Arena.ofConfined()) {
+            MemorySegment body = scratch.allocate(Ffm.VIEW);
+            put(body, scratch, bytes);
+            MemorySegment out = scratch.allocate(JAVA_LONG);
+            Ffm.check((int) messageSend.invokeExact(resource, kind, code, body, out));
+            return out.get(JAVA_LONG, 0);
+        } catch (Throwable failure) { throw Ffm.unexpected(failure); }
+    }
+
     private long response(long resource, int status, List<Header> headers, byte[] bytes) {
         try (Arena scratch = Arena.ofConfined()) {
             long count = headers.size();
-            MemorySegment entries = scratch.allocate(count * HEADER.byteSize(), HEADER.byteAlignment());
-            for (int index = 0; index < count; index++) {
-                Header header = headers.get(index);
-                MemorySegment value = entries.asSlice(index * HEADER.byteSize(), HEADER.byteSize());
-                put(value.asSlice(0, 16), scratch, utf8(header.name()));
-                put(value.asSlice(16, 16), scratch, header.bytes());
-            }
+            MemorySegment entries = entries(scratch, headers);
             MemorySegment out = scratch.allocate(JAVA_LONG);
             if (bytes == null) {
                 Ffm.check((int) head.invokeExact(resource, status, entries, count, out));

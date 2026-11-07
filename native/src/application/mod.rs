@@ -457,10 +457,13 @@ impl Driver {
         };
         if app.active.lock().map_err(|_| Status::Panic)?.len()
             >= app.settings.max_exchanges
-            || frame.upgrade
         {
-            let status = if frame.upgrade { 501 } else { 503 };
-            http::refuse(app, frame, status)?;
+            http::refuse(app, frame, 503)?;
+            return Ok(());
+        }
+        // Nothing can carry a session's messages without its duplex slot.
+        if frame.upgrade && frame.body.is_none() {
+            http::refuse(app, frame, 400)?;
             return Ok(());
         }
         let uri = match http::absolute_uri(&frame) {

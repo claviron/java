@@ -16,7 +16,7 @@ import static java.lang.foreign.ValueLayout.JAVA_LONG;
 /** Private layouts for the reviewed C header. No application-supplied descriptors. */
 @SuppressWarnings("restricted") // Native-access operations are confined to this reviewed boundary.
 final class Ffm {
-    static final int ABI = 3;
+    static final int ABI = 4;
     static final int END = 10;
     static final int ALREADY_COMPLETED = 11;
     static final MemoryLayout INFO = MemoryLayout.structLayout(

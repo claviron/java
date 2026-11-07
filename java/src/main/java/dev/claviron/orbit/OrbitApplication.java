@@ -13,6 +13,17 @@ public final class OrbitApplication implements AutoCloseable {
         CompletionStage<OrbitResponse> handle(OrbitRequest request) throws Exception;
     }
 
+    /**
+     * Decides one session request and then owns the accepted session. Claviron has not
+     * answered the client yet, so authentication belongs here. Completing without an
+     * answer refuses with 501; completing without a close ends the session as an
+     * application end without one, which clients see as 1011.
+     */
+    @FunctionalInterface
+    public interface SessionHandler {
+        CompletionStage<Void> handle(OrbitSessionRequest offer) throws Exception;
+    }
+
     final NativeRuntime runtime;
     final ApplicationFfm api;
     private final long handle;
@@ -147,6 +158,11 @@ public final class OrbitApplication implements AutoCloseable {
 
     /** The caller supplies an asynchronous handler executor; no framework/common pool is selected. */
     public CompletionStage<Void> serve(Handler handler, Executor executor) {
+        return serve(handler, null, executor);
+    }
+
+    /** As {@link #serve(Handler, Executor)}, with WebSocket and WebTransport requests going to sessions. */
+    public CompletionStage<Void> serve(Handler handler, SessionHandler sessions, Executor executor) {
         synchronized (calls) {
             if (intake != null || withdrawn.get()) throw new IllegalStateException("Application intake already started or closed");
             intake = Thread.ofPlatform().name("orbit-intake").start(() -> {
@@ -156,7 +172,7 @@ public final class OrbitApplication implements AutoCloseable {
                         OrbitRequest request = nextRequest().toCompletableFuture().join();
                         if (request == null) break;
                         synchronized (pending) { active++; }
-                        try { executor.execute(() -> handle(request, handler)); }
+                        try { executor.execute(() -> handle(request, handler, sessions)); }
                         catch (Throwable error) { finish(request); }
                     }
                 } catch (Throwable error) {
@@ -178,13 +194,15 @@ public final class OrbitApplication implements AutoCloseable {
         return serving.minimalCompletionStage();
     }
 
-    private void handle(OrbitRequest request, Handler handler) {
+    private void handle(OrbitRequest request, Handler handler, SessionHandler sessions) {
         // Retire bridge work even if Java ignores cancellation and returns late.
         // The JVM/executor owns that computation; no thread is forcibly stopped.
         AtomicBoolean retired = new AtomicBoolean();
         Runnable retire = () -> { if (retired.compareAndSet(false, true)) finish(request); };
         request.cancelled().whenComplete((ignored, failure) -> retire.run());
         if (retired.get() || !request.current()) { retire.run(); return; }
+        OrbitSessionRequest offer = request.sessionRequest();
+        if (offer != null) { handleSession(offer, sessions, retired, retire); return; }
         CompletionStage<OrbitResponse> response;
         try {
             response = handler.handle(request);
@@ -195,6 +213,19 @@ public final class OrbitApplication implements AutoCloseable {
             OrbitResponse result = failure == null && value != null ? value : OrbitResponse.text(500,
                     java.util.List.of(Header.text("content-type", "text/plain")), "Internal Server Error");
             try { request.respond(result).whenComplete((ignored, error) -> retire.run()); }
+            catch (Throwable error) { retire.run(); }
+        });
+    }
+
+    private static void handleSession(OrbitSessionRequest offer, SessionHandler sessions, AtomicBoolean retired, Runnable retire) {
+        CompletionStage<Void> done;
+        try {
+            done = sessions == null ? CompletableFuture.completedStage(null) : sessions.handle(offer);
+            if (done == null) throw new IllegalStateException("Session handler returned no completion stage");
+        } catch (Throwable failure) { done = CompletableFuture.failedStage(failure); }
+        done.whenComplete((ignored, failure) -> {
+            if (retired.get()) return;
+            try { offer.settle(failure != null).whenComplete((value, error) -> retire.run()); }
             catch (Throwable error) { retire.run(); }
         });
     }

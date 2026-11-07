@@ -13,6 +13,7 @@ public final class OrbitRequest implements AutoCloseable {
     private final ApplicationFfm.Metadata metadata;
     private final CompletableFuture<Void> cancelled = new CompletableFuture<>();
     private final CompletionStage<NativeBuffer> terminal;
+    private OrbitSessionRequest session;
     private boolean closed;
 
     OrbitRequest(OrbitApplication application, long handle) {
@@ -33,6 +34,12 @@ public final class OrbitRequest implements AutoCloseable {
     public URI uri() { return metadata.uri(); }
     public String httpVersion() { return metadata.version(); }
     public List<Header> headers() { return metadata.headers(); }
+    /** The session this request asks for, or null for an ordinary HTTP request. */
+    public synchronized OrbitSessionRequest sessionRequest() {
+        if (!metadata.session()) return null;
+        if (session == null) session = new OrbitSessionRequest(this);
+        return session;
+    }
     public CompletionStage<Void> cancelled() { return cancelled.minimalCompletionStage(); }
     CompletionStage<NativeBuffer> terminal() { return terminal; }
 
@@ -83,6 +90,23 @@ public final class OrbitRequest implements AutoCloseable {
     synchronized CompletionStage<Void> finishResponse() {
         requireOpen();
         NativeOperation operation = application.runtime.submit(ignored -> application.api.operation(application.api.finish, handle));
+        return operation.completion().thenApply(ignored -> null);
+    }
+
+    synchronized CompletionStage<Void> acceptSession(int maxMessageBytes, List<Header> headers) {
+        requireOpen();
+        NativeOperation operation = application.runtime.submit(ignored -> application.api.acceptSession(handle, maxMessageBytes, headers));
+        return operation.completion().thenApply(ignored -> null);
+    }
+
+    synchronized CompletionStage<NativeBuffer> readMessage() {
+        requireOpen();
+        return application.runtime.submit(ignored -> application.api.readMessage(handle)).completion();
+    }
+
+    synchronized CompletionStage<Void> sendMessage(int kind, int code, byte[] bytes) {
+        requireOpen();
+        NativeOperation operation = application.runtime.submit(ignored -> application.api.sendMessage(handle, kind, code, bytes));
         return operation.completion().thenApply(ignored -> null);
     }
 
