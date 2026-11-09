@@ -77,7 +77,8 @@ impl Application {
             || settings.control_capacity == 0
             || settings.control_capacity > tokio::sync::Semaphore::MAX_PERMITS
             || settings.incarnation == 0
-            || settings.max_exchanges > tokio::sync::Semaphore::MAX_PERMITS
+            || settings.max_exchanges
+                > claviron::orbit::link::application::LINK_INBOX_CAPACITY
             || settings.event_capacity > tokio::sync::Semaphore::MAX_PERMITS
         {
             return Err(Status::InvalidArgument);
@@ -349,7 +350,12 @@ impl Driver {
                 .map_err(transport)?,
         );
         let joined = segment
-            .join(&app.settings.name, "java", app.settings.incarnation)
+            .join_with_capacity(
+                &app.settings.name,
+                "java",
+                app.settings.incarnation,
+                Some(app.settings.max_exchanges),
+            )
             .map_err(transport)?;
         let bodies = ApplicationBodies::for_segment(
             &segment,
@@ -358,7 +364,8 @@ impl Driver {
         )
         .map_err(transport)?;
         bodies.reclaimed(&joined.reclaimed);
-        let mut receiver = segment.receiver(joined.lane).map_err(transport)?;
+        let mut receiver =
+            segment.application_receiver(joined.lane).map_err(transport)?;
         let fleet = Arc::new(
             Fleet::join_shm_as(
                 &app.settings.fleet,
@@ -398,10 +405,25 @@ impl Driver {
                 Received::Event => {
                     events.accept(&frame)?;
                 }
-                Received::Directory(_) => {}
-                Received::Frame => {
+                Received::Directory(_) | Received::Capacity(_) => {}
+                Received::Frame | Received::Work(_) => {
+                    let admission = match segment.accept_frame(
+                        joined.lane,
+                        received,
+                        &frame,
+                    ) {
+                        Ok(admission) => admission,
+                        Err(_) => {
+                            if let Ok(frame) = claviron::orbit::link::application::Exchange::decode(tokio_util::bytes::Bytes::copy_from_slice(&frame)) {
+                                http::refuse(app, frame, 503)?;
+                            }
+                            continue;
+                        }
+                    };
                     match frame_kind(&frame).map_err(transport)? {
-                        FrameKind::Request => self.accept(&frame).await?,
+                        FrameKind::Request => {
+                            self.accept(&mut frame, admission).await?
+                        }
                         FrameKind::Control => self.control(&frame)?,
                         FrameKind::ShutdownInitiated => {
                             let notice = claviron::orbit::link::application::ShutdownNotice::decode(&frame).map_err(transport)?;
@@ -446,11 +468,24 @@ impl Driver {
 
     async fn accept(
         &self,
-        bytes: &[u8],
+        bytes: &mut Vec<u8>,
+        admission: Option<(
+            usize,
+            claviron::orbit::link::application::WorkExecution,
+        )>,
     ) -> Result<()> {
         let app = &self.application;
-        let frame = claviron::orbit::link::application::Exchange::decode(bytes)
-            .map_err(transport)?;
+        let frame = claviron::orbit::link::application::Exchange::decode(
+            tokio_util::bytes::Bytes::from(std::mem::take(bytes)),
+        )
+        .map_err(transport)?;
+        if admission
+            .as_ref()
+            .is_some_and(|(origin, _)| *origin != frame.origin as usize)
+        {
+            http::refuse(app, frame, 400)?;
+            return Ok(());
+        }
         let Some(generation) = app.lifecycle.capture()? else {
             http::refuse(app, frame, 503)?;
             return Ok(());
@@ -462,7 +497,7 @@ impl Driver {
             return Ok(());
         }
         // Nothing can carry a session's messages without its duplex slot.
-        if frame.upgrade && frame.body.is_none() {
+        if frame.upgrade && frame.stream.is_none() {
             http::refuse(app, frame, 400)?;
             return Ok(());
         }
@@ -473,7 +508,13 @@ impl Driver {
                 return Ok(());
             }
         };
-        let exchange = Exchange::new(Arc::clone(app), frame, uri, generation)?;
+        let exchange = Exchange::new(
+            Arc::clone(app),
+            frame,
+            uri,
+            generation,
+            admission.map(|(_, work)| work),
+        )?;
         let id = state::register_exchange(Arc::clone(&exchange))?;
         exchange.id.store(id, std::sync::atomic::Ordering::Release);
         app.active.lock().map_err(|_| Status::Panic)?.insert(id);

@@ -297,3 +297,16 @@ JARs without bundling fixture code. Partial previews cannot be uploaded.
 Signing and a USER_MANAGED Portal upload are separate explicit commands; upload
 does not request automatic publication. Packaging tests use an ephemeral key
 and mock the upload endpoint, without a real deployment.
+
+## Receiver admission
+
+The native application advertises its existing retained-exchange budget through
+Link admission. Callers reserve shared target capacity before opening a body
+stream. Intake uses `ApplicationReceiver` and `accept_frame`; saturation does not
+pause management/event reception. A validated ticket stays with the exchange
+through I/O completion and foreign-handle release. The budget must fit the
+compiled `LINK_INBOX_CAPACITY`; a larger value is rejected at join.
+
+Request payload location is independent of the duplex cancellation/session
+stream: inline payloads are read from their decoded frame slice, streamed payloads
+from the input half. Replies declare their own payload location.

@@ -1,6 +1,6 @@
 //! Isolated real-Link streaming acceptance. No listener, load test or timers.
 use claviron::orbit::link::application::{
-    ApplicationClient, Exchange, LINK_BUFFER_BYTES, Pending,
+    ApplicationClient, Exchange, ExchangeBody, LINK_BUFFER_BYTES, Pending,
 };
 use std::io::Write;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -23,9 +23,13 @@ fn send(
             scheme: "http".into(),
             raw_path: path.to_vec(),
             headers: vec![(b"host".to_vec(), b"example.test".to_vec())],
+            body: if upload {
+                ExchangeBody::Stream
+            } else {
+                ExchangeBody::Empty
+            },
             ..Default::default()
         },
-        upload,
     )?)
 }
 async fn command(
@@ -46,7 +50,7 @@ async fn main() -> Result<()> {
     signal(&format!("PEER_READY {transfer}"))?;
     let mut input = BufReader::new(tokio::io::stdin()).lines();
     command(&mut input, "run").await?;
-    let (_upload, mut response, reply) =
+    let (_upload, mut response, reply, _) =
         send(&client, b"/write", false)?.split();
     if reply.head().await?.status != 200 {
         return Err("stream head failed".into());
@@ -61,7 +65,7 @@ async fn main() -> Result<()> {
     drop(response);
     drop(_upload);
 
-    let (upload, response, reply) =
+    let (upload, response, reply, _) =
         send(&client, b"/write-cancel", false)?.split();
     if reply.head().await?.status != 200 {
         return Err("cancel head failed".into());
@@ -72,7 +76,7 @@ async fn main() -> Result<()> {
     drop(upload);
     command(&mut input, "write-cancelled").await?;
 
-    let (upload, response, reply) =
+    let (upload, response, reply, _) =
         send(&client, b"/read-cancel", true)?.split();
     if reply.head().await?.status != 200 {
         return Err("read cancel head failed".into());
@@ -83,7 +87,7 @@ async fn main() -> Result<()> {
     drop(upload);
     command(&mut input, "read-cancelled").await?;
 
-    let (_upload, mut response, reply) =
+    let (_upload, mut response, reply, _) =
         send(&client, b"/read-abort", true)?.split();
     let _ = reply.head().await; // Head may race the intentionally immediate reset.
     let mut bytes = Vec::new();
@@ -94,7 +98,7 @@ async fn main() -> Result<()> {
     drop(_upload);
     command(&mut input, "read-aborted").await?;
 
-    let (_upload, mut response, reply) =
+    let (_upload, mut response, reply, _) =
         send(&client, b"/producer-fail", false)?.split();
     let _ = reply.head().await;
     let mut bytes = Vec::new();
@@ -104,7 +108,7 @@ async fn main() -> Result<()> {
     drop(response);
     drop(_upload);
 
-    let (_upload, mut response, reply) =
+    let (_upload, mut response, reply, _) =
         send(&client, b"/echo", false)?.split();
     if reply.head().await?.status != 200 {
         return Err("empty upload head failed".into());
@@ -117,7 +121,7 @@ async fn main() -> Result<()> {
     drop(response);
     drop(_upload);
 
-    let (mut upload, mut response, reply) =
+    let (mut upload, mut response, reply, _) =
         send(&client, b"/echo", true)?.split();
     if reply.head().await?.status != 200 {
         return Err("duplex head failed".into());
@@ -140,7 +144,7 @@ async fn main() -> Result<()> {
     }
     drop(response);
     drop(upload);
-    let (_upload, mut response, reply) =
+    let (_upload, mut response, reply, _) =
         send(&client, b"/plain", false)?.split();
     if reply.head().await?.status != 200 {
         return Err("healthy request failed after stream cancellations".into());
@@ -154,7 +158,7 @@ async fn main() -> Result<()> {
     drop(_upload);
     signal("HTTP_CHECKS_PASSED")?;
 
-    let (mut upload, mut response, reply) =
+    let (mut upload, mut response, reply, _) =
         send(&client, b"/drain", true)?.split();
     if reply.head().await?.status != 200 {
         return Err("drain head failed".into());

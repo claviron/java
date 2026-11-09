@@ -110,6 +110,7 @@ struct Command {
     cancellation: CancellationToken,
 }
 struct Input {
+    inline: tokio_util::bytes::Bytes,
     half: Option<ReadHalf>,
     busy: bool,
     eof: bool,
@@ -117,6 +118,7 @@ struct Input {
 }
 
 pub struct Exchange {
+    _admission: Option<claviron::orbit::link::application::WorkExecution>,
     pub(super) application: Arc<Application>,
     pub(super) id: AtomicU64,
     pub(super) frame: Frame,
@@ -189,8 +191,9 @@ impl Exchange {
         frame: Frame,
         uri: Box<str>,
         generation: Arc<super::lifecycle::Generation>,
+        admission: Option<claviron::orbit::link::application::WorkExecution>,
     ) -> Result<Arc<Self>> {
-        let (input, output) = match frame.body {
+        let (input, output) = match frame.stream {
             Some(ticket) => {
                 let (input, output) = application
                     .data()?
@@ -204,8 +207,18 @@ impl Exchange {
         };
         // The gate admits one output operation; this slot is not a chunk queue.
         let (response, receiver) = mpsc::channel(1);
-        let eof = input.is_none();
+        let inline = match &frame.body {
+            claviron::orbit::link::application::ExchangeBody::Inline(bytes) => {
+                bytes.clone()
+            }
+            _ => tokio_util::bytes::Bytes::new(),
+        };
+        let eof = matches!(
+            frame.body,
+            claviron::orbit::link::application::ExchangeBody::Empty
+        );
         Ok(Arc::new(Self {
+            _admission: admission,
             application,
             generation,
             id: AtomicU64::new(0),
@@ -214,6 +227,7 @@ impl Exchange {
             response,
             receiver: Mutex::new(Some(receiver)),
             input: Mutex::new(Input {
+                inline,
                 half: input,
                 busy: false,
                 eof,
@@ -299,7 +313,7 @@ impl Exchange {
         headers: Headers,
     ) -> Result<Handle> {
         if !self.frame.upgrade
-            || self.frame.body.is_none()
+            || self.frame.stream.is_none()
             || max_message_bytes == 0
         {
             return Err(Status::InvalidArgument);
@@ -402,7 +416,8 @@ impl Exchange {
         let (operation, mut payload) =
             state::submit_read(self.application.engine, capacity)?;
         let cancellation = state::cancellation(operation)?;
-        let mut half = input.half.take().ok_or(Status::Panic)?;
+        let mut half = input.half.take();
+        let mut inline = std::mem::take(&mut input.inline);
         input.busy = true;
         drop(input);
         let host = self.application.host.get().ok_or(Status::Closed)?.clone();
@@ -414,14 +429,22 @@ impl Exchange {
                 () = self.cancel.cancelled() => Err(Status::Cancelled),
                 () = self.input_stop.cancelled() => Err(Status::Cancelled),
                 () = cancellation.cancelled() => Err(Status::Cancelled),
-                value = half.read(&mut payload.bytes) => value.map_err(transport),
+                value = async {
+                    if !inline.is_empty() {
+                        let length = inline.len().min(payload.bytes.len());
+                        payload.bytes[..length].copy_from_slice(&inline.split_to(length));
+                        Ok(length)
+                    } else if matches!(self.frame.body, claviron::orbit::link::application::ExchangeBody::Stream) {
+                        match half.as_mut() { Some(half) => half.read(&mut payload.bytes).await.map_err(transport), None => Ok(0) }
+                    } else { Ok(0) }
+                } => value,
             };
             {
                 let mut input = self.input.lock().expect("request input");
                 input.busy = false;
                 match result {
                     Ok(0) => { input.eof = true; },
-                    Ok(_) if !self.input_stop.is_cancelled() => { input.half = Some(half); },
+                    Ok(_) if !self.input_stop.is_cancelled() => { input.half = half; input.inline = inline; },
                     _ => {},
                 }
             }
@@ -542,7 +565,11 @@ impl Exchange {
             correlation: self.frame.correlation,
             status,
             headers,
-            body: self.frame.body,
+            body: if self.frame.stream.is_some() {
+                claviron::orbit::link::application::ExchangeBody::Stream
+            } else {
+                claviron::orbit::link::application::ExchangeBody::Empty
+            },
         };
         self.application
             .data()?
@@ -773,7 +800,7 @@ pub(super) fn refuse(
 ) -> Result<()> {
     let data = application.data()?;
     let mut endpoint = frame
-        .body
+        .stream
         .map(|ticket| data.bodies.accept(ticket))
         .transpose()
         .map_err(transport)?;
@@ -781,7 +808,11 @@ pub(super) fn refuse(
         correlation: frame.correlation,
         status,
         headers: Vec::new(),
-        body: frame.body,
+        body: if frame.stream.is_some() {
+            claviron::orbit::link::application::ExchangeBody::Stream
+        } else {
+            claviron::orbit::link::application::ExchangeBody::Empty
+        },
     };
     let published = data
         .segment

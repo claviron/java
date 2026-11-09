@@ -1,5 +1,6 @@
 //! Lifecycle controls across sibling JVMs, using the existing application wire protocol.
 use claviron::app::fleet::decode_link_snapshot_rows;
+use claviron::orbit::link::application::ExchangeBody;
 use claviron::orbit::link::application::{
     ApplicationClient, ApplicationSegment, ApplicationStateNotice,
     ControlCommand, ControlTarget, Exchange, FrameKind, LINK_BUFFER_BYTES,
@@ -53,9 +54,9 @@ fn send(
             scheme: "http".into(),
             raw_path: path.as_bytes().to_vec(),
             headers: vec![(b"host".to_vec(), b"example.test".to_vec())],
+            body: if body { ExchangeBody::Stream } else { ExchangeBody::Empty },
             ..Default::default()
         },
-        body,
     )?)
 }
 async fn healthy(
@@ -66,7 +67,7 @@ async fn healthy(
 ) -> Result<()> {
     let mut seen = HashSet::new();
     for _ in 0..(instances * 4) {
-        let (_upload, mut response, reply) =
+        let (_upload, mut response, reply, _) =
             send(client, name, "/state", false)?.split();
         if reply.head().await?.status != 200 {
             return Err("healthy response was refused".into());
@@ -185,13 +186,13 @@ async fn main() -> Result<()> {
     client.command(&control("life", "stop", "java", "life"))?;
     reports.wait(&life, 1, false).await?;
     for pending in [first, second] {
-        let (_upload, _response, reply) = pending.split();
+        let (_upload, _response, reply, _) = pending.split();
         if reply.head().await.is_ok() {
             return Err("stopped generation produced a late response".into());
         }
     }
     for _ in 0..8 {
-        let (_upload, mut response, reply) =
+        let (_upload, mut response, reply, _) =
             send(&client, "life", "/state", false)?.split();
         if reply.head().await?.status != 503 {
             return Err("stopped request did not return 503".into());
@@ -214,7 +215,7 @@ async fn main() -> Result<()> {
     command(&mut input, "blocked").await?;
     let mut blocked = Vec::new();
     for path in ["/write", "/write", "/read", "/read"] {
-        let (upload, response, reply) =
+        let (upload, response, reply, _) =
             send(&client, "life", path, path == "/read")?.split();
         if reply.head().await?.status != 200 {
             return Err("blocked generation head failed".into());
@@ -249,7 +250,7 @@ async fn main() -> Result<()> {
     client.command(&control("life", "stop", "java", "life"))?;
     reports.wait(&life, 4, false).await?;
     for pending in [first, second] {
-        let (_upload, _response, reply) = pending.split();
+        let (_upload, _response, reply, _) = pending.split();
         if reply.head().await.is_ok() {
             return Err("final stopped handler responded".into());
         }

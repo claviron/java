@@ -1,4 +1,5 @@
 //! Message sessions against a JVM application, as the edge drives them on Link.
+use claviron::orbit::link::application::ExchangeBody;
 use claviron::orbit::link::application::client::{LentRead, LentWrite};
 use claviron::orbit::link::application::{
     ApplicationClient, Exchange, ExchangeReply, HttpVersion, Message,
@@ -30,8 +31,15 @@ async fn open(
     path: &str,
     version: HttpVersion,
 ) -> Result<(ExchangeReply, LentWrite, LentRead)> {
-    let (input, output, reply) =
-        client.send("app", request(path, version), true)?.split();
+    let (input, output, reply, _) = client
+        .send(
+            "app",
+            claviron::orbit::link::application::Exchange {
+                body: ExchangeBody::Stream,
+                ..request(path, version)
+            },
+        )?
+        .split();
     Ok((reply.head().await?, input, output))
 }
 
@@ -66,7 +74,15 @@ async fn main() -> Result<()> {
     // The application decides before the client is answered.
     let mut refused = request("/session-reject", HttpVersion::Http11);
     refused.headers.push((b"x-token".to_vec(), b"denied".to_vec()));
-    let (_, _, reply) = client.send("app", refused, true)?.split();
+    let (_, _, reply, _) = client
+        .send(
+            "app",
+            claviron::orbit::link::application::Exchange {
+                body: ExchangeBody::Stream,
+                ..refused
+            },
+        )?
+        .split();
     let head = reply.head().await?;
     assert_eq!(head.status, 403);
     assert_eq!(header(&head, b"x-refused"), Some(&b"denied"[..]));

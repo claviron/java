@@ -130,9 +130,8 @@ async fn request(
             ],
             ..Default::default()
         },
-        false,
     )?;
-    let (_upload, mut response, reply) = pending.split();
+    let (_upload, mut response, reply, _) = pending.split();
     let head = reply.head().await?;
     let mut body = Vec::new();
     response.read_to_end(&mut body).await?;
@@ -267,9 +266,8 @@ async fn main() -> Result<()> {
             headers: vec![(b"host".to_vec(), b"example.test".to_vec())],
             ..Default::default()
         },
-        false,
     )?;
-    let (upload, response, reply) = pending.split();
+    let (upload, response, reply, _) = pending.split();
     drop(response);
     drop(upload);
     if reply.head().await.is_ok() {
