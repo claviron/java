@@ -32,6 +32,7 @@ fn control(
     target: &str,
 ) -> ControlCommand {
     ControlCommand {
+        origin: None,
         application: name.into(),
         name: action.into(),
         payload: Vec::new(),
@@ -165,6 +166,7 @@ async fn main() -> Result<()> {
             segment.inbox().write(peer.lane, &invalid.encode()?)?;
         }
         let probe = ControlCommand {
+            origin: None,
             application: "life".into(),
             name: "probe".into(),
             payload: vec![0, 255],

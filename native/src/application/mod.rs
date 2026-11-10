@@ -78,7 +78,7 @@ impl Application {
             || settings.control_capacity > tokio::sync::Semaphore::MAX_PERMITS
             || settings.incarnation == 0
             || settings.max_exchanges
-                > claviron::orbit::link::application::LINK_INBOX_CAPACITY
+                >= claviron::orbit::link::application::LINK_INBOX_CAPACITY
             || settings.event_capacity > tokio::sync::Semaphore::MAX_PERMITS
         {
             return Err(Status::InvalidArgument);
@@ -369,7 +369,7 @@ impl Driver {
         let fleet = Arc::new(
             Fleet::join_shm_as(
                 &app.settings.fleet,
-                claviron::orbit::link::application::LINK_FLEET_CAPACITY as u16,
+                segment.spec().fleet_capacity,
                 claviron::orbitive::NodeId::new(joined.lane as u16),
             )
             .map_err(transport)?,
@@ -392,7 +392,7 @@ impl Driver {
             })
             .map_err(|_| Status::AlreadyCompleted)?;
         Arc::clone(&events).start(&app.io, app.events_stop.clone())?;
-        events::publish_status(app)?;
+        events::publish_status(app, None)?;
         self.startup.send(Ok(()));
         let mut frame = Vec::new();
         loop {
@@ -538,7 +538,7 @@ impl Driver {
         }
         match command.name.as_str() {
             "status" if command.target.is_none() => {
-                events::publish_status(app)?
+                events::publish_status(app, command.origin.map(usize::from))?
             }
             "start" | "stop" | "restart" => {
                 if command.target.as_ref().is_some_and(|target| {

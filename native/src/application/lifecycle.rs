@@ -231,7 +231,7 @@ impl Application {
             self.fail(error);
             return Err(error);
         }
-        super::events::publish_status(self)
+        super::events::publish_status(self, None)
     }
     pub(super) fn fail(
         &self,

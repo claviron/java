@@ -15,7 +15,7 @@ bound retained exchanges and pending event delivery. FFM operation and byte
 budgets remain distinct bridge resources.
 
 The driver exclusively reads the application inbox, using Claviron's existing
-TransportSegment, TransportBodies, frame and application-event codecs. It never
+ApplicationSegment, ApplicationBodies, frame and application-event codecs. It never
 implements SHM geometry, resets a fleet or unlinks shared resources. Each accepted
 exchange retains its request metadata, duplex endpoints and application owner.
 A response has one final head, then either a complete owned body or incremental
@@ -304,9 +304,18 @@ The native application advertises its existing retained-exchange budget through
 Link admission. Callers reserve shared target capacity before opening a body
 stream. Intake uses `ApplicationReceiver` and `accept_frame`; saturation does not
 pause management/event reception. A validated ticket stays with the exchange
-through I/O completion and foreign-handle release. The budget must fit the
-compiled `LINK_INBOX_CAPACITY`; a larger value is rejected at join.
+through I/O completion and foreign-handle release. The retained-exchange budget
+is the total admission window (running work included), not an additional queue. It is positive and strictly below
+`LINK_INBOX_CAPACITY`, leaving inbox space for control frames. These bindings do
+not declare a separate, lower execution limit.
 
 Request payload location is independent of the duplex cancellation/session
 stream: inline payloads are read from their decoded frame slice, streamed payloads
 from the input half. Replies declare their own payload location.
+
+Status queries reply to the asking Edge lane; lifecycle changes still broadcast
+to connected Edges. Response heads use `ApplicationSegment::publish_reply`. If
+producer records are busy, only that exchange's output owner waits on
+`record_released`, retaining its admission and bridge credits. Cancellation and
+HTTP reader departure interrupt that wait; intake and event/control readers keep
+running. Refusals issued by intake remain best-effort and never wait for records.

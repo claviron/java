@@ -335,7 +335,10 @@ impl EventRecord {
     }
 }
 
-pub(super) fn publish_status(application: &Application) -> Result<()> {
+pub(super) fn publish_status(
+    application: &Application,
+    to: Option<usize>,
+) -> Result<()> {
     use claviron::app::fleet::{
         FleetApplicationListSnapshot, FleetApplicationPlacement,
         FleetApplicationStatus, encode_link_snapshot_rows,
@@ -383,7 +386,7 @@ pub(super) fn publish_status(application: &Application) -> Result<()> {
     let rows =
         encode_link_snapshot_rows(&snapshot, member).map_err(transport)?;
     data.segment
-        .publish_application_state(&application.settings.name, &rows)
+        .publish_application_state(&application.settings.name, &rows, to)
         .map(|_| ())
         .map_err(transport)
 }

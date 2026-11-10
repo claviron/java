@@ -556,11 +556,14 @@ impl Exchange {
         output.shutdown().await.map_err(transport)
     }
 
-    fn publish_head(
+    async fn publish_head(
         &self,
         status: u16,
         headers: Headers,
+        output: &mut Option<WriteHalf>,
     ) -> Result<()> {
+        use claviron::orbit::link::application::Error as LinkError;
+
         let reply = ExchangeReply {
             correlation: self.frame.correlation,
             status,
@@ -571,16 +574,25 @@ impl Exchange {
                 claviron::orbit::link::application::ExchangeBody::Empty
             },
         };
-        self.application
-            .data()?
-            .segment
-            .inbox()
-            .write(
-                self.frame.origin as usize,
-                &reply.encode().map_err(transport)?,
-            )
-            .map_err(transport)?;
-        Ok(())
+        let bytes = reply.encode().map_err(transport)?;
+        let segment = &self.application.data()?.segment;
+        loop {
+            match segment.publish_reply(self.frame.origin as usize, &[&bytes]) {
+                Ok(()) => return Ok(()),
+                Err(LinkError::ProducerBusy) => {
+                    tokio::select! {
+                        result = segment.record_released() => { result.map_err(transport)?; },
+                        _ = async {
+                            match output.as_mut() {
+                                Some(output) => { let _ = output.peer_closed().await; },
+                                None => std::future::pending().await,
+                            }
+                        }, if !self.frame.upgrade => return Err(Status::Cancelled),
+                    }
+                }
+                Err(error) => return Err(transport(error)),
+            }
+        }
     }
 
     async fn execute(
@@ -590,14 +602,14 @@ impl Exchange {
     ) -> Result<bool> {
         match std::mem::replace(&mut command.action, Action::Write) {
             Action::Head { status, headers } => {
-                self.publish_head(status, headers)?;
+                self.publish_head(status, headers, output).await?;
                 Ok(false)
             }
             Action::Complete { status, headers } => {
                 if output.is_none() && !command.body.bytes.is_empty() {
                     return Err(Status::Transport);
                 }
-                self.publish_head(status, headers)?;
+                self.publish_head(status, headers, output).await?;
                 if let Some(output) = output {
                     output
                         .write_all(&command.body.bytes)
@@ -814,10 +826,10 @@ pub(super) fn refuse(
             claviron::orbit::link::application::ExchangeBody::Empty
         },
     };
-    let published = data
-        .segment
-        .inbox()
-        .write(frame.origin as usize, &reply.encode().map_err(transport)?);
+    let published = data.segment.publish_reply(
+        frame.origin as usize,
+        &[&reply.encode().map_err(transport)?],
+    );
     if let Some(endpoint) = &mut endpoint {
         if published.is_ok() {
             endpoint.finish().map_err(transport)?;
