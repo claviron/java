@@ -22,7 +22,7 @@ import static java.lang.foreign.ValueLayout.JAVA_LONG;
 @SuppressWarnings("restricted")
 final class ApplicationFfm {
     private static final MemoryLayout OPTIONS = MemoryLayout.structLayout(
-            JAVA_INT, JAVA_INT, JAVA_LONG, JAVA_LONG, JAVA_LONG, JAVA_LONG, Ffm.VIEW, Ffm.VIEW);
+            JAVA_INT, JAVA_INT, JAVA_LONG, JAVA_LONG, JAVA_LONG, JAVA_LONG, JAVA_LONG, Ffm.VIEW, Ffm.VIEW);
     private static final MemoryLayout INFO = MemoryLayout.structLayout(JAVA_INT, JAVA_INT, Ffm.VIEW, Ffm.VIEW, JAVA_LONG, JAVA_LONG, JAVA_LONG);
     private static final MemoryLayout HEADER = MemoryLayout.structLayout(Ffm.VIEW, Ffm.VIEW);
     private static final MemoryLayout EVENT = MemoryLayout.structLayout(Ffm.VIEW, Ffm.VIEW, Ffm.VIEW);
@@ -123,11 +123,12 @@ final class ApplicationFfm {
             value.set(JAVA_INT, 0, (int) OPTIONS.byteSize());
             value.set(JAVA_INT, 4, Ffm.ABI);
             value.set(JAVA_LONG, 8, options.incarnation());
-            value.set(JAVA_LONG, 16, options.maxExchanges());
-            value.set(JAVA_LONG, 24, options.eventCapacity());
-            value.set(JAVA_LONG, 32, options.controlCapacity());
-            put(value.asSlice(40, 16), scratch, utf8(options.fleet()));
-            put(value.asSlice(56, 16), scratch, utf8(options.name()));
+            value.set(JAVA_LONG, 16, options.maxInFlight());
+            value.set(JAVA_LONG, 24, options.maxQueued());
+            value.set(JAVA_LONG, 32, options.eventCapacity());
+            value.set(JAVA_LONG, 40, options.controlCapacity());
+            put(value.asSlice(48, 16), scratch, utf8(options.fleet()));
+            put(value.asSlice(64, 16), scratch, utf8(options.name()));
             MemorySegment out = scratch.allocate(JAVA_LONG);
             Ffm.check((int) join.invokeExact(engine, value, out));
             return out.get(JAVA_LONG, 0);

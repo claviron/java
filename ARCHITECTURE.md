@@ -127,10 +127,11 @@ No cleanup correctness depends on finalizers, Cleaner, process exit or GC.
 
 Production application operations include request/event intake, response
 completion, terminal observation, generation retirement, control delivery and
-application drain. ABI version 4 keeps buffer/resource completions, an explicit
-control budget, generation request metadata and checked control/state records, and
-adds message sessions: a receive's lease carries one message's kind, close code and
-data. The Java/native pair rejects mismatched ABI versions before joining.
+application drain. ABI version 5 declares `maxInFlight` as the execution
+limit and `maxQueued` as the waiting limit. Their sum is the Link admission
+window. `WorkQueue` promotes waiting exchanges after a running exchange
+releases its credit. A zero queue limit uses direct intake. A message session
+receive leases one message's kind, close code and data. The Java/native pair rejects mismatched ABI versions before joining.
 The separate test fixture still admits controlled byte payloads and cannot be
 loaded as a production producer by accident.
 
@@ -259,7 +260,7 @@ reservation ownership even after a byte buffer moves into the protocol. Core
 wire/accepted-job storage has its own configured bounds; it is not counted as
 FFM-retained buffer memory. Empty results also pin their engine until release.
 
-ABI 3 gains an additive invoke capability and separately queried fixed C layouts.
+Invoke has a separate ABI capability and layout query.
 Invoke binding, incoming invocation and completed result are distinct typed handle
 kinds. The Java API separates InvokeCall/InvokeResult, OrbitInvocation/InvokeReply
 and HTTP types. No JNI, framework adapter, implicit timeout or JVM lifecycle hook

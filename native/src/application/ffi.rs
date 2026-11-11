@@ -86,13 +86,15 @@ pub unsafe fn join(
     boundary(|| {
         output(options.cast_mut())?;
         output(out)?;
-        let options = unsafe { options.read() };
-        if options.struct_size != size_of::<ApplicationOptions>() as u32
-            || options.abi_version != ABI_VERSION
+        let prefix = options.cast::<u32>();
+        if unsafe { prefix.read() } != size_of::<ApplicationOptions>() as u32
+            || unsafe { prefix.add(1).read() } != ABI_VERSION
         {
             return Err(Status::Incompatible);
         }
-        if options.max_exchanges > isize::MAX as u64
+        let options = unsafe { options.read() };
+        if options.max_in_flight > isize::MAX as u64
+            || options.max_queued > isize::MAX as u64
             || options.event_capacity > isize::MAX as u64
             || options.control_capacity > isize::MAX as u64
         {
@@ -102,7 +104,8 @@ pub unsafe fn join(
             fleet: unsafe { text(options.fleet)? }.into(),
             name: unsafe { text(options.name)? }.into(),
             incarnation: options.incarnation,
-            max_exchanges: options.max_exchanges as usize,
+            max_in_flight: options.max_in_flight as usize,
+            max_queued: options.max_queued as usize,
             event_capacity: options.event_capacity as usize,
             control_capacity: options.control_capacity as usize,
         };

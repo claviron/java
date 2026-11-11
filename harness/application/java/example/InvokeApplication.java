@@ -31,7 +31,7 @@ public final class InvokeApplication {
         try(NativeLibrary library=NativeLibrary.load(Path.of(args[0]));
             NativeRuntime runtime=library.openRuntime(96,bound*16L,2);
             var executor=Executors.newVirtualThreadPerTaskExecutor();
-            OrbitApplication application=runtime.join(new ApplicationOptions(args[1],"demo",17,8,4,8))){
+            OrbitApplication application=runtime.join(new ApplicationOptions(args[1],"demo",17,8, 0,4,8))){
             OrbitInvocations invokes=application.invocations(new InvokeOptions(args[2],"java",4,1,32,1024,bound,
                     Map.of("native","rust","missing","absent","ambiguous","dupe")));
             invokes.serve(request->{

@@ -231,7 +231,7 @@ class PackagingChecks(unittest.TestCase):
         if kind == "version":
             entries[meta] = entries[meta].replace(b"version=0.1.0", b"version=9.0.0")
         elif kind == "abi":
-            entries[meta] = entries[meta].replace(b"abi=3", b"abi=4")
+            entries[meta] = entries[meta].replace(f"abi={release.ABI}".encode(), b"abi=0")
         elif kind == "checksum":
             lib = next(name for name in entries if name.endswith((".so", ".dylib")))
             entries[lib] += b"corrupted fixture"

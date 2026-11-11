@@ -8,11 +8,13 @@ pub mod lifecycle;
 
 use async_trait::async_trait;
 use claviron::orbit::link::application::{
-    ApplicationBodies, ApplicationSegment, FrameKind, Received, frame_kind,
+    ApplicationBodies, ApplicationSegment, FrameKind, Offered, Received, Start,
+    WorkQueue, frame_kind,
 };
 use claviron::orbitive::Fleet;
 use claviron::runtime::{RunContext, Runnable};
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::JoinHandle;
 use tokio::sync::{Mutex as AsyncMutex, Notify, mpsc};
@@ -26,9 +28,27 @@ pub(crate) struct Settings {
     pub fleet: Box<str>,
     pub name: Box<str>,
     pub incarnation: u64,
-    pub max_exchanges: usize,
+    pub max_in_flight: usize,
+    pub max_queued: usize,
     pub event_capacity: usize,
     pub control_capacity: usize,
+}
+
+#[derive(Default)]
+struct Releases {
+    count: AtomicUsize,
+    changed: Notify,
+}
+
+impl Releases {
+    fn record(&self) {
+        self.count.fetch_add(1, Ordering::Release);
+        self.changed.notify_one();
+    }
+
+    fn take(&self) -> usize {
+        self.count.swap(0, Ordering::AcqRel)
+    }
 }
 
 struct Data {
@@ -59,6 +79,7 @@ pub struct Application {
     invoke_children: Mutex<HashSet<Handle>>,
     events_stop: CancellationToken,
     changed: Notify,
+    released: Option<Releases>,
     failure: Mutex<Option<Status>>,
 }
 
@@ -68,17 +89,26 @@ fn transport(error: impl std::fmt::Display) -> Status {
 }
 
 impl Application {
+    fn work_finished(&self) {
+        if let Some(released) = &self.released {
+            released.record();
+        }
+    }
+
     pub(crate) fn start(
         engine: Handle,
         settings: Settings,
     ) -> Result<Handle> {
-        if settings.max_exchanges == 0
+        let window = settings
+            .max_in_flight
+            .checked_add(settings.max_queued)
+            .ok_or(Status::InvalidArgument)?;
+        if settings.max_in_flight == 0
             || settings.event_capacity == 0
             || settings.control_capacity == 0
             || settings.control_capacity > tokio::sync::Semaphore::MAX_PERMITS
             || settings.incarnation == 0
-            || settings.max_exchanges
-                >= claviron::orbit::link::application::LINK_INBOX_CAPACITY
+            || window >= claviron::orbit::link::application::LINK_INBOX_CAPACITY
             || settings.event_capacity > tokio::sync::Semaphore::MAX_PERMITS
         {
             return Err(Status::InvalidArgument);
@@ -89,10 +119,11 @@ impl Application {
             &settings.name,
         )
         .map_err(|_| Status::InvalidArgument)?;
-        let (ready, requests) = mpsc::channel(settings.max_exchanges);
+        let (ready, requests) = mpsc::channel(settings.max_in_flight);
         let owner = Arc::new(Self {
             engine,
             lifecycle: lifecycle::Lifecycle::new(settings.control_capacity),
+            released: (settings.max_queued > 0).then(Releases::default),
             settings,
             _lease: state::lease(engine)?,
             data: OnceLock::new(),
@@ -354,9 +385,15 @@ impl Driver {
                 &app.settings.name,
                 "java",
                 app.settings.incarnation,
-                Some(app.settings.max_exchanges),
+                Some(app.settings.max_in_flight + app.settings.max_queued),
             )
             .map_err(transport)?;
+        if let Err(error) =
+            segment.set_work_execution(joined.lane, app.settings.max_in_flight)
+        {
+            let _ = segment.inbox().release_lane(joined.lane);
+            return Err(transport(error));
+        }
         let bodies = ApplicationBodies::for_segment(
             &segment,
             joined.lane,
@@ -395,10 +432,26 @@ impl Driver {
         events::publish_status(app, None)?;
         self.startup.send(Ok(()));
         let mut frame = Vec::new();
+        let mut work = app.released.as_ref().map(|_| WorkQueue::new());
         loop {
             let received = tokio::select! {
                 biased;
                 () = context.cancelled() => break,
+                () = async {
+                    match &app.released {
+                        Some(released) => released.changed.notified().await,
+                        None => std::future::pending().await,
+                    }
+                }, if work.is_some() => {
+                    let finished = app.released.as_ref().expect("queued admission").take();
+                    let work = work.as_mut().expect("queued admission");
+                    for _ in 0..finished {
+                        if let Some(start) = work.finished(&segment, joined.lane) {
+                            self.start(start)?;
+                        }
+                    }
+                    continue;
+                }
                 value = receiver.next(&mut frame) => value.map_err(transport)?,
             };
             match received {
@@ -407,7 +460,37 @@ impl Driver {
                 }
                 Received::Directory(_) | Received::Capacity(_) => {}
                 Received::Frame | Received::Work(_) => {
-                    let admission = match segment.accept_frame(
+                    if matches!(frame_kind(&frame), Ok(FrameKind::Request)) {
+                        let offered = match &mut work {
+                            Some(work) => work.offer(
+                                &segment,
+                                joined.lane,
+                                received,
+                                &mut frame,
+                            ),
+                            None => segment
+                                .accept_frame(joined.lane, received, &frame)
+                                .map(|admission| {
+                                    Offered::Start((
+                                        std::mem::take(&mut frame),
+                                        admission,
+                                    ))
+                                }),
+                        };
+                        match offered {
+                            Ok(Offered::Start(start)) => self.start(start)?,
+                            Ok(Offered::Held) => {}
+                            Err(_) => {
+                                if let Ok(request) = claviron::orbit::link::application::Exchange::decode(
+                                    tokio_util::bytes::Bytes::copy_from_slice(&frame),
+                                ) {
+                                    http::refuse(app, request, 503)?;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    let _admission = match segment.accept_frame(
                         joined.lane,
                         received,
                         &frame,
@@ -421,9 +504,6 @@ impl Driver {
                         }
                     };
                     match frame_kind(&frame).map_err(transport)? {
-                        FrameKind::Request => {
-                            self.accept(&mut frame, admission).await?
-                        }
                         FrameKind::Control => self.control(&frame)?,
                         FrameKind::ShutdownInitiated => {
                             let notice = claviron::orbit::link::application::ShutdownNotice::decode(&frame).map_err(transport)?;
@@ -466,17 +546,23 @@ impl Driver {
         Ok(())
     }
 
-    async fn accept(
+    fn start(
         &self,
-        bytes: &mut Vec<u8>,
-        admission: Option<(
-            usize,
-            claviron::orbit::link::application::WorkExecution,
-        )>,
+        start: Start,
     ) -> Result<()> {
+        if !self.accept(start)? {
+            self.application.work_finished();
+        }
+        Ok(())
+    }
+
+    fn accept(
+        &self,
+        (bytes, admission): Start,
+    ) -> Result<bool> {
         let app = &self.application;
         let frame = claviron::orbit::link::application::Exchange::decode(
-            tokio_util::bytes::Bytes::from(std::mem::take(bytes)),
+            tokio_util::bytes::Bytes::from(bytes),
         )
         .map_err(transport)?;
         if admission
@@ -484,28 +570,28 @@ impl Driver {
             .is_some_and(|(origin, _)| *origin != frame.origin as usize)
         {
             http::refuse(app, frame, 400)?;
-            return Ok(());
+            return Ok(false);
         }
         let Some(generation) = app.lifecycle.capture()? else {
             http::refuse(app, frame, 503)?;
-            return Ok(());
+            return Ok(false);
         };
         if app.active.lock().map_err(|_| Status::Panic)?.len()
-            >= app.settings.max_exchanges
+            >= app.settings.max_in_flight
         {
             http::refuse(app, frame, 503)?;
-            return Ok(());
+            return Ok(false);
         }
         // Nothing can carry a session's messages without its duplex slot.
         if frame.upgrade && frame.stream.is_none() {
             http::refuse(app, frame, 400)?;
-            return Ok(());
+            return Ok(false);
         }
         let uri = match http::absolute_uri(&frame) {
             Ok(uri) => uri,
             Err(_) => {
                 http::refuse(app, frame, 400)?;
-                return Ok(());
+                return Ok(false);
             }
         };
         let exchange = Exchange::new(
@@ -522,7 +608,7 @@ impl Driver {
         if app.ready.try_send(id).is_err() {
             state::remove_exchange(id)?;
         }
-        Ok(())
+        Ok(true)
     }
 
     fn control(

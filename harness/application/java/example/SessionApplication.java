@@ -64,7 +64,7 @@ public final class SessionApplication {
         try (NativeLibrary library = NativeLibrary.load(Path.of(args[0]));
              NativeRuntime runtime = library.openRuntime(64, 1 << 20, 2);
              var executor = Executors.newVirtualThreadPerTaskExecutor();
-             OrbitApplication application = runtime.join(new ApplicationOptions(args[1], "app", 1, 8, 16, 16))) {
+             OrbitApplication application = runtime.join(new ApplicationOptions(args[1], "app", 1, 8, 0, 16, 16))) {
             application.serve(request -> CompletableFuture.completedStage(OrbitResponse.text("http")), SessionApplication::serve, executor);
             signal("SESSION_READY");
             if (System.in.read() < 0) throw new IllegalStateException("Stop command missing");

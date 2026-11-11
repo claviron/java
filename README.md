@@ -15,6 +15,9 @@ preview APIs or a Java framework. Shared cells and sessions remain a later stage
 End-to-end validation covers Linux x86-64. macOS arm64 is checked to load, join
 and close; the other platforms are built and checked but have not been run.
 
+Java drives Orbit I/O on a dedicated current-thread runtime.
+`inherit`, running Orbit I/O on the host's own loop, is reserved and unavailable.
+
 ## Install
 
 Requires JDK 25 LTS. Add the API and the native library for your platform, one of
@@ -55,7 +58,7 @@ import java.util.concurrent.Executors;
 
 public final class Main {
     public static void main(String[] args) throws Exception {
-        var options = new ApplicationOptions("example", "hello", 1, 64, 64, 64);
+        var options = new ApplicationOptions("example", "hello", 1, 64, 0, 64, 64);
         try (var library = NativeLibrary.load();
              var runtime = library.openRuntime(1024, 16 * 1024 * 1024, 2);
              var handlers = Executors.newVirtualThreadPerTaskExecutor();
@@ -345,7 +348,11 @@ process RSS bound. No end-to-end zero-copy claim is made.
 
 ## FFM ownership and completion
 
-The C ABI is version 4. Application options require `controlCapacity`, request
+The C ABI is version 5. `maxInFlight` bounds running exchanges and must be
+positive. `maxQueued` bounds waiting exchanges and may be zero. Their sum
+must be below the Link inbox capacity. The native queue promotes waiting work
+after a running exchange releases its credit. Application options require
+`controlCapacity`, request
 metadata includes its generation and whether it is a session, and control/state
 records have checked layouts.
 Use the native library and JAR of one version together; older ABI versions are rejected.

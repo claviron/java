@@ -25,7 +25,7 @@ public final class LifecycleApplication {
         try (NativeLibrary library = NativeLibrary.load(Path.of(args[0]));
              NativeRuntime runtime = library.openRuntime(96, transfer * 4L, 2);
              var executor = Executors.newVirtualThreadPerTaskExecutor();
-             OrbitApplication application = runtime.join(new ApplicationOptions(args[1], args[2], 17, 16, 1, 16))) {
+             OrbitApplication application = runtime.join(new ApplicationOptions(args[1], args[2], 17, 16, 0, 1, 16))) {
             CompletableFuture<Void> releaseEvents = new CompletableFuture<>();
             if (!tag.equals("other")) {
                 var firstEvent = new java.util.concurrent.atomic.AtomicBoolean();

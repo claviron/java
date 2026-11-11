@@ -20,7 +20,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-ABI = 3
+ABI = 5
 JAVA_RELEASE = 25
 TARGETS = {
     "linux-x86_64": ("x86_64-unknown-linux-gnu", "libclaviron_java.so", "x86-64", 62, (0, 3)),

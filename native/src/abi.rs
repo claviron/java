@@ -1,5 +1,5 @@
 /// Revision of the C records and function contracts; not an Orbit wire version.
-pub const ABI_VERSION: u32 = 4;
+pub const ABI_VERSION: u32 = 5;
 /// ABI capability bit for ownership and completions, without Link/HTTP support.
 pub const FOUNDATION: u64 = 1;
 /// Application HTTP transport and subscription capabilities, not raw service invoke.
@@ -113,7 +113,8 @@ pub struct ApplicationOptions {
     pub struct_size: u32,
     pub abi_version: u32,
     pub incarnation: u64,
-    pub max_exchanges: u64,
+    pub max_in_flight: u64,
+    pub max_queued: u64,
     pub event_capacity: u64,
     pub control_capacity: u64,
     pub fleet: ByteView,

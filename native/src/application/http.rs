@@ -118,7 +118,7 @@ struct Input {
 }
 
 pub struct Exchange {
-    _admission: Option<claviron::orbit::link::application::WorkExecution>,
+    admission: Option<claviron::orbit::link::application::WorkExecution>,
     pub(super) application: Arc<Application>,
     pub(super) id: AtomicU64,
     pub(super) frame: Frame,
@@ -142,6 +142,7 @@ pub struct Exchange {
 impl Drop for Exchange {
     fn drop(&mut self) {
         self.cancel.cancel();
+        drop(self.admission.take());
         let id = self.id.load(Ordering::Acquire);
         if id != 0 {
             if let Ok(mut active) = self.application.active.lock() {
@@ -149,6 +150,7 @@ impl Drop for Exchange {
             }
             self.application.changed.notify_waiters();
         }
+        self.application.work_finished();
     }
 }
 
@@ -218,7 +220,7 @@ impl Exchange {
             claviron::orbit::link::application::ExchangeBody::Empty
         );
         Ok(Arc::new(Self {
-            _admission: admission,
+            admission,
             application,
             generation,
             id: AtomicU64::new(0),

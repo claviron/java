@@ -27,7 +27,7 @@ public final class PlainApplication {
         String instance = args[3];
         if (!instance.matches("[A-Za-z0-9_-]+")) throw new IllegalArgumentException("Use an alphanumeric example instance tag");
         ApplicationOptions options = new ApplicationOptions(args[1], args[2], Long.parseLong(args[4]),
-                Integer.parseInt(args[8]), Integer.parseInt(args[9]), Integer.parseInt(args[10]));
+                Integer.parseInt(args[8]), 0, Integer.parseInt(args[9]), Integer.parseInt(args[10]));
         try (NativeLibrary library = NativeLibrary.load(Path.of(args[0]));
              NativeRuntime runtime = library.openRuntime(Integer.parseInt(args[5]), Long.parseLong(args[6]), Integer.parseInt(args[7]));
              var handlers = Executors.newVirtualThreadPerTaskExecutor();

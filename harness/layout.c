@@ -16,8 +16,8 @@ _Static_assert(offsetof(oj_buffer_view_record, length) == 8, "length offset");
 
 _Static_assert(sizeof(oj_bytes) == 16, "byte view size");
 _Static_assert(sizeof(oj_header) == 32, "header pair size");
-_Static_assert(sizeof(oj_application_options) == 72, "application options size");
-_Static_assert(offsetof(oj_application_options, fleet) == 40, "fleet view offset");
+_Static_assert(sizeof(oj_application_options) == 80, "application options size");
+_Static_assert(offsetof(oj_application_options, fleet) == 48, "fleet view offset");
 _Static_assert(sizeof(oj_application_layout) == 48, "application layout query size");
 _Static_assert(sizeof(oj_request_record) == 64, "request info size");
 _Static_assert(offsetof(oj_request_record, header_count) == 40, "header count offset");

@@ -6,8 +6,8 @@
 extern "C" {
 #endif
 
-/* Protocol constants, not operational defaults. ABI v3 supports 64-bit targets. */
-#define OJ_ABI_VERSION UINT32_C(4)
+/* Protocol constants, not operational defaults. ABI v5 supports 64-bit targets. */
+#define OJ_ABI_VERSION UINT32_C(5)
 #define OJ_CAP_FOUNDATION UINT64_C(1)
 #define OJ_CAP_APPLICATION UINT64_C(2)
 #define OJ_CAP_STREAMING UINT64_C(4)
@@ -85,7 +85,7 @@ typedef struct { const uint8_t *data; uint64_t length; } oj_bytes;
 typedef struct { oj_bytes name, value; } oj_header;
 typedef struct {
     uint32_t struct_size, abi_version;
-    uint64_t incarnation, max_exchanges, event_capacity, control_capacity;
+    uint64_t incarnation, max_in_flight, max_queued, event_capacity, control_capacity;
     oj_bytes fleet, name;
 } oj_application_options;
 typedef struct {
