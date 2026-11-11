@@ -202,9 +202,13 @@ class PackagingChecks(unittest.TestCase):
             prepared(cls.root, target, data)
         cls.folder = release.assemble(cls.root)
         cls.manifest = release.validate_bundle(cls.folder, cls.root)
-        cls.repository = cls.folder / "repository/org/example/orbit/0.1.0"
-        cls.main_jar = cls.repository / "claviron-java-0.1.0.jar"
-        cls.native_jar = cls.repository / ("claviron-java-0.1.0-" + release.selected_target() + ".jar")
+        group = Path(*cls.manifest["groupId"].split("."))
+        artifact = cls.manifest["artifactId"]
+        version = cls.manifest["version"]
+        cls.repository = cls.folder / "repository" / group / artifact / version
+        stem = f"{artifact}-{version}"
+        cls.main_jar = cls.repository / f"{stem}.jar"
+        cls.native_jar = cls.repository / f"{stem}-{release.selected_target()}.jar"
         cls.classes = Path(cls.temporary.name) / "checks"
         cls.classes.mkdir()
         release.run([release.jdk_tool("javac"), "--release", "25", "-Xlint:all", "-Werror", "-cp", cls.main_jar,
@@ -228,14 +232,15 @@ class PackagingChecks(unittest.TestCase):
         with zipfile.ZipFile(self.native_jar) as archive:
             entries = {name: archive.read(name) for name in archive.namelist()}
         meta = next(name for name in entries if name.endswith("native.properties"))
+        version = self.manifest["version"]
         if kind == "version":
-            entries[meta] = entries[meta].replace(b"version=0.1.0", b"version=9.0.0")
+            entries[meta] = entries[meta].replace(f"version={version}".encode(), b"version=9.0.0")
         elif kind == "abi":
             entries[meta] = entries[meta].replace(f"abi={release.ABI}".encode(), b"abi=0")
         elif kind == "checksum":
             lib = next(name for name in entries if name.endswith((".so", ".dylib")))
             entries[lib] += b"corrupted fixture"
-        release.jar(path, entries, "0.1.0")
+        release.jar(path, entries, version)
         return path
 
     def test_packaged_load_cleanup_and_native_access_grant(self):
