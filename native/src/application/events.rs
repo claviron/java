@@ -131,8 +131,11 @@ impl Events {
                         () = control_stop.cancelled() => return Ok(()),
                         value = control_ready.readable() => {
                             let mut guard = value.map_err(transport)?;
-                            control_ready.get_ref().drain().map_err(transport)?;
+                            // Clear before draining: a signal that lands after the
+                            // drain is the only one until the next drain, and
+                            // clearing after would erase it.
                             guard.clear_ready();
+                            control_ready.get_ref().drain().map_err(transport)?;
                         }
                     }
                 }
@@ -183,8 +186,11 @@ impl Events {
                         () = stop.cancelled() => return Ok(()),
                         result = ready.readable() => {
                             let mut guard = result.map_err(transport)?;
-                            ready.get_ref().drain().map_err(transport)?;
+                            // Clear before draining: a signal that lands after the
+                            // drain is the only one until the next drain, and
+                            // clearing after would erase it.
                             guard.clear_ready();
+                            ready.get_ref().drain().map_err(transport)?;
                         },
                     }
                 }
