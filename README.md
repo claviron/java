@@ -46,7 +46,7 @@ Maven:
 ```
 
 The upcoming `dev.claviron:orbit:0.1.1` release targets Claviron
-`0.2.0-alpha.26` and uses native ABI 5.
+`0.2.1` and uses native ABI 5.
 
 ## Use from a Java application
 

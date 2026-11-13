@@ -56,6 +56,7 @@ struct Data {
     bodies: ApplicationBodies,
     events: Arc<events::Events>,
     lane: usize,
+    pid: u32,
     hold: Mutex<Option<claviron::orbitive::shm::LaneHold>>,
 }
 
@@ -425,6 +426,7 @@ impl Driver {
                 bodies,
                 events: Arc::clone(&events),
                 lane: joined.lane,
+                pid: std::process::id(),
                 hold: Mutex::new(Some(joined.hold)),
             })
             .map_err(|_| Status::AlreadyCompleted)?;

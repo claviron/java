@@ -392,7 +392,12 @@ pub(super) fn publish_status(
     let rows =
         encode_link_snapshot_rows(&snapshot, member).map_err(transport)?;
     data.segment
-        .publish_application_state(&application.settings.name, &rows, to)
+        .publish_application_state(
+            &application.settings.name,
+            data.pid,
+            &rows,
+            to,
+        )
         .map(|_| ())
         .map_err(transport)
 }
