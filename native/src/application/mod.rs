@@ -395,12 +395,16 @@ impl Driver {
             let _ = segment.inbox().release_lane(joined.lane);
             return Err(transport(error));
         }
-        let bodies = ApplicationBodies::for_segment(
+        let mut bodies = ApplicationBodies::for_segment(
             &segment,
             joined.lane,
             app.settings.incarnation,
         )
         .map_err(transport)?;
+        if let Err(error) = bodies.prepare_http(&segment, joined.lane, app.settings.incarnation) {
+            let _ = segment.inbox().release_lane(joined.lane);
+            return Err(transport(error));
+        }
         bodies.reclaimed(&joined.reclaimed);
         let mut receiver =
             segment.application_receiver(joined.lane).map_err(transport)?;

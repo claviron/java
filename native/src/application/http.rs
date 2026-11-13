@@ -1,8 +1,9 @@
 use claviron::orbit::link::application::{
-    Exchange as Frame, ExchangeReply, Headers, Message, MessageReader,
+    Exchange as Frame, ExchangeBody, ExchangeReply, Headers, Message, MessageReader,
     write_message,
 };
-use claviron::orbitive::stream::{ReadHalf, WriteHalf};
+use claviron::orbit::link::application::body::ResponseWriter;
+use claviron::orbitive::stream::ReadHalf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -127,7 +128,7 @@ pub struct Exchange {
     response: mpsc::Sender<Command>,
     receiver: Mutex<Option<mpsc::Receiver<Command>>>,
     input: Mutex<Input>,
-    output: Mutex<Option<WriteHalf>>,
+    output: Mutex<Option<ResponseWriter>>,
     gate: Mutex<OutputGate>,
     cancel: CancellationToken,
     input_stop: CancellationToken,
@@ -195,18 +196,8 @@ impl Exchange {
         generation: Arc<super::lifecycle::Generation>,
         admission: Option<claviron::orbit::link::application::WorkExecution>,
     ) -> Result<Arc<Self>> {
-        let (input, output) = match frame.stream {
-            Some(ticket) => {
-                let (input, output) = application
-                    .data()?
-                    .bodies
-                    .accept(ticket)
-                    .map_err(transport)?
-                    .split();
-                (Some(input), Some(output))
-            }
-            None => (None, None),
-        };
+        let (input, output) =
+            application.data()?.bodies.accept_http(&frame).map_err(transport)?;
         // The gate admits one output operation; this slot is not a chunk queue.
         let (response, receiver) = mpsc::channel(1);
         let inline = match &frame.body {
@@ -545,10 +536,10 @@ impl Exchange {
     /// observations, never codes sent on the wire.
     async fn answer_close(
         &self,
-        output: &mut Option<WriteHalf>,
+        output: &mut Option<ResponseWriter>,
     ) -> Result<()> {
         let close = self.peer_close.lock().map_err(|_| Status::Panic)?.take();
-        let Some(output) = output.as_mut() else { return Ok(()) };
+        let Some(ResponseWriter::ByteStream(output)) = output.as_mut() else { return Ok(()) };
         if let Some((code, reason)) = close
             && !matches!(code, 1005 | 1006)
         {
@@ -562,7 +553,8 @@ impl Exchange {
         &self,
         status: u16,
         headers: Headers,
-        output: &mut Option<WriteHalf>,
+        output: &mut Option<ResponseWriter>,
+        body: ExchangeBody,
     ) -> Result<()> {
         use claviron::orbit::link::application::Error as LinkError;
 
@@ -570,11 +562,7 @@ impl Exchange {
             correlation: self.frame.correlation,
             status,
             headers,
-            body: if self.frame.stream.is_some() {
-                claviron::orbit::link::application::ExchangeBody::Stream
-            } else {
-                claviron::orbit::link::application::ExchangeBody::Empty
-            },
+            body,
         };
         let bytes = reply.encode().map_err(transport)?;
         let segment = &self.application.data()?.segment;
@@ -600,33 +588,39 @@ impl Exchange {
     async fn execute(
         &self,
         command: &mut Command,
-        output: &mut Option<WriteHalf>,
+        output: &mut Option<ResponseWriter>,
     ) -> Result<bool> {
         match std::mem::replace(&mut command.action, Action::Write) {
             Action::Head { status, headers } => {
-                self.publish_head(status, headers, output).await?;
+                let body = if output.is_some() { ExchangeBody::Stream } else { ExchangeBody::Empty };
+                self.publish_head(status, headers, output, body).await?;
+                if let Some(output) = output {
+                    output.start().map_err(transport)?;
+                }
                 Ok(false)
             }
             Action::Complete { status, headers } => {
                 if output.is_none() && !command.body.bytes.is_empty() {
                     return Err(Status::Transport);
                 }
-                self.publish_head(status, headers, output).await?;
-                if let Some(output) = output {
-                    output
-                        .write_all(&command.body.bytes)
-                        .await
-                        .map_err(transport)?;
-                    output.shutdown().await.map_err(transport)?;
+                if command.body.bytes.is_empty() && !self.frame.upgrade {
+                    if let Some(output) = output.as_mut() {
+                        output.finish_empty().map_err(transport)?;
+                    }
+                    self.publish_head(status, headers, output, ExchangeBody::Empty).await?;
+                } else {
+                    self.publish_head(status, headers, output, ExchangeBody::Stream).await?;
+                    if let Some(output) = output {
+                        output.start().map_err(transport)?;
+                        output.write(&command.body.bytes).await.map_err(transport)?;
+                        output.finish().await.map_err(transport)?;
+                    }
                 }
                 Ok(true)
             }
             Action::Write => {
                 if let Some(output) = output {
-                    output
-                        .write_all(&command.body.bytes)
-                        .await
-                        .map_err(transport)?;
+                    output.write(&command.body.bytes).await.map_err(transport)?;
                 } else if !command.body.bytes.is_empty() {
                     return Err(Status::Transport);
                 }
@@ -634,12 +628,14 @@ impl Exchange {
             }
             Action::Finish => {
                 if let Some(output) = output {
-                    output.shutdown().await.map_err(transport)?;
+                    output.finish().await.map_err(transport)?;
                 }
                 Ok(true)
             }
             Action::Message { kind, code } => {
-                let output = output.as_mut().ok_or(Status::Transport)?;
+                let Some(ResponseWriter::ByteStream(output)) = output.as_mut() else {
+                    return Err(Status::Transport);
+                };
                 let bytes = std::mem::take(&mut command.body.bytes).into_vec();
                 let text = |bytes| {
                     String::from_utf8(bytes).map_err(|_| Status::Transport)
@@ -813,30 +809,22 @@ pub(super) fn refuse(
     status: u16,
 ) -> Result<()> {
     let data = application.data()?;
-    let mut endpoint = frame
-        .stream
-        .map(|ticket| data.bodies.accept(ticket))
-        .transpose()
-        .map_err(transport)?;
+    let (_input, mut output) = data.bodies.accept_http(&frame).map_err(transport)?;
     let reply = ExchangeReply {
         correlation: frame.correlation,
         status,
         headers: Vec::new(),
-        body: if frame.stream.is_some() {
-            claviron::orbit::link::application::ExchangeBody::Stream
-        } else {
-            claviron::orbit::link::application::ExchangeBody::Empty
-        },
+        body: ExchangeBody::Empty,
     };
     let published = data.segment.publish_reply(
         frame.origin as usize,
         &[&reply.encode().map_err(transport)?],
     );
-    if let Some(endpoint) = &mut endpoint {
+    if let Some(output) = &mut output {
         if published.is_ok() {
-            endpoint.finish().map_err(transport)?;
+            output.finish_empty().map_err(transport)?;
         } else {
-            endpoint.reset();
+            output.reset();
         }
     }
     published.map(|_| ()).map_err(transport)
