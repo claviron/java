@@ -28,8 +28,8 @@ Gradle:
 
 ```kotlin
 dependencies {
-    implementation("dev.claviron:orbit-java:0.1.0")
-    runtimeOnly("dev.claviron:orbit-java:0.1.0:linux-x86_64")
+    implementation("dev.claviron:orbit:0.1.2")
+    runtimeOnly("dev.claviron:orbit:0.1.2:linux-x86_64")
 }
 ```
 
@@ -37,15 +37,15 @@ Maven:
 
 ```xml
 <dependency>
-  <groupId>dev.claviron</groupId><artifactId>orbit-java</artifactId><version>0.1.0</version>
+  <groupId>dev.claviron</groupId><artifactId>orbit</artifactId><version>0.1.2</version>
 </dependency>
 <dependency>
-  <groupId>dev.claviron</groupId><artifactId>orbit-java</artifactId><version>0.1.0</version>
+  <groupId>dev.claviron</groupId><artifactId>orbit</artifactId><version>0.1.2</version>
   <classifier>linux-x86_64</classifier><scope>runtime</scope>
 </dependency>
 ```
 
-The upcoming `dev.claviron:orbit:0.1.1` release targets Claviron
+The `dev.claviron:orbit:0.1.2` release targets Claviron
 `0.2.1` and uses native ABI 5.
 
 ## Use from a Java application
