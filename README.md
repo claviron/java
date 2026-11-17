@@ -10,7 +10,7 @@ owns its handlers, threads and JVM lifetime.
 HTTP with incremental uploads and streaming responses, shared application
 events, start/stop/restart with generation cancellation, and bidirectional
 invokes on a separate Link are supported. The binding uses JDK FFM, without JNI,
-preview APIs or a Java framework. Shared cells and sessions remain a later stage.
+preview APIs or a Java framework. Sessions remain a later stage.
 
 End-to-end validation covers Linux x86-64. macOS arm64 is checked to load, join
 and close; the other platforms are built and checked but have not been run.
@@ -217,8 +217,8 @@ is refused while child application owners remain.
 
 The native driver is a Continuo Runnable through Claviron's runtime facade; it
 runs on one owned current-thread Tokio host, without booting an entire Claviron
-system. Status uses the existing Java application description/schema. Shared
-cells, sessions and generic service mode remain subsequent work. No framework
+system. Status uses the existing Java application description/schema.
+Sessions and generic service mode remain subsequent work. No framework
 adapter is included.
 
 ## Application lifecycle and generations
